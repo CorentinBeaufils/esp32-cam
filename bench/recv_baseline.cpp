@@ -17,7 +17,7 @@
 #include <vector>
 
 // ---------------------------------------------------------------------------
-// recv_baseline — le RÉCEPTEUR ÉTALON (TP-P4).
+// recv_baseline — le RECEPTEUR ETALON.
 //
 // Volontairement NAÏF : un socket UDP bloquant, une boucle recvfrom, un
 // réassemblage minimal (une map frame_id -> fragments reçus). AUCUN asio,

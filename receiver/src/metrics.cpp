@@ -2,15 +2,13 @@
 #include <cmath>
 
 // ---------------------------------------------------------------------------
-// TP-P1b — à toi de jouer (partie 1/2 : MetricsWindow).
-//   Énoncé : ENONCE.md   Bloqué : INDICES.md   Corrigé : solution/metrics.cpp
+// MetricsWindow : metriques temps reel sur une fenetre glissante de trames.
 // ---------------------------------------------------------------------------
 namespace rx {
 
 MetricsWindow::MetricsWindow(std::uint64_t window_us) : window_us_(window_us) {}
 
 void MetricsWindow::add(std::uint64_t emit_us, std::uint64_t recv_us) {
-    // TODO :
     //   - latence en ms = (recv_us - emit_us) / 1000. Attention : recv et emit
     //     sont des uint64 -> calcule la différence en SIGNÉ pour éviter un
     //     débordement si recv < emit (dérive d'horloge), et borne à >= 0.
@@ -31,7 +29,7 @@ void MetricsWindow::add(std::uint64_t emit_us, std::uint64_t recv_us) {
 }
 
 double MetricsWindow::fps() const {
-    // TODO : nombre d'échantillons / (window_us_ en secondes).
+    // nombre d'échantillons / (window_us_ en secondes).
     if (window_us_ <= 0) {
         return 0.0; 
     }
@@ -39,7 +37,7 @@ double MetricsWindow::fps() const {
 }
 
 double MetricsWindow::avg_latency_ms() const {
-    // TODO : moyenne des latency_ms (0 si vide).
+    // moyenne des latency_ms (0 si vide).
     if (samples_.empty()) {
         return 0.0;
     }
@@ -51,7 +49,7 @@ double MetricsWindow::avg_latency_ms() const {
 }
 
 double MetricsWindow::jitter_ms() const {
-    // TODO : écart absolu moyen des latences autour de leur moyenne
+    // écart absolu moyen des latences autour de leur moyenne
     //   ( moyenne de |latence_i - moyenne| ), 0 si vide.
     if (samples_.empty()) {
         return 0.0;

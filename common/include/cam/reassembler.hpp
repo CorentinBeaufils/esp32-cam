@@ -10,7 +10,7 @@
 
 // ---------------------------------------------------------------------------
 // Reassembler: consumes raw UDP datagrams and emits COMPLETE JPEG frames. It
-// does NO networking -- you feed it bytes, like the TP5 decoder. That is what
+// does NO networking -- you feed it bytes, like a byte-stream decoder. That is what
 // makes it testable without a socket or hardware.
 //
 // Real-time handling:

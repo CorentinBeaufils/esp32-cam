@@ -23,8 +23,12 @@ PC qui **réassemble**, mesure la télémétrie (fps, pertes, corruption, gigue)
 ## Architecture
 
 ```
-ESP32-CAM ──JPEG/UDP──► PC : réassemblage → télémétrie → affichage → upscaling
+ESP32-CAM ──JPEG/UDP──► PC : réassemblage → décodage → upscaling → affichage
+                                    └────────► télémétrie (fps, pertes, gigue)
 ```
+
+Deux visualiseurs distincts consomment ce flux : `display/viewer` (affichage direct)
+et `upscaler/viewer_up` (agrandissement adaptatif **puis** affichage).
 
 | Module | Rôle |
 |---|---|
@@ -35,7 +39,9 @@ ESP32-CAM ──JPEG/UDP──► PC : réassemblage → télémétrie → affic
 | `upscaler/` (`up`) | upscaling classique **adaptatif** dans le budget temps réel |
 | `bench/` | **le banc** : générateur, 5 récepteurs, métrique commune, harnais, graphes |
 | `firmware/` | firmware ESP32 réel (PlatformIO) |
-| `annexe-tp/` | matériel pédagogique (indices, corrigés) — hors présentation |
+
+> `annexe-tp/` (énoncés, indices, corrigés des TP d'origine) est conservé en local
+> pour révision mais **git-ignoré** — hors du dépôt public.
 
 ## Construire & lancer
 

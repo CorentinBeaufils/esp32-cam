@@ -1,13 +1,12 @@
 #include "sim/pacer.hpp"
 
 // ---------------------------------------------------------------------------
-// TP-P1a — à toi de jouer (partie 1/2 : le Pacer).
-//   Énoncé : ENONCE.md   Bloqué : INDICES.md   Corrigé : solution/pacer.cpp
+// Pacer : cadence l'emission a un fps cible (echeances regulieres).
 // ---------------------------------------------------------------------------
 namespace sim {
 
 Pacer::Pacer(double target_fps) {
-    // TODO : convertir target_fps en une période (nanosecondes). 25 fps -> 40 ms.
+    // convertir target_fps en une période (nanosecondes). 25 fps -> 40 ms.
     // Protège-toi d'un fps <= 0 (mets une valeur par défaut raisonnable).
     if (target_fps <= 0) {
         target_fps = 25; // 25 fps default
@@ -16,12 +15,11 @@ Pacer::Pacer(double target_fps) {
 }
 
 void Pacer::start(clock::time_point now) {
-    // TODO : armer la première échéance sur `now`.
+    // armer la première échéance sur `now`.
     deadline_ = now + period_;
 }
 
 std::chrono::nanoseconds Pacer::next_wait(clock::time_point now) {
-    // TODO :
     //   - avancer l'échéance d'une période : deadline_ += period_
     //   - si now <= deadline_  : on est à l'heure -> renvoyer (deadline_ - now)
     //   - sinon (en retard)    : compter les battements manqués

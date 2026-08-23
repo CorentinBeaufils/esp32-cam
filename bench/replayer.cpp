@@ -16,7 +16,7 @@
 #include <vector>
 
 // ---------------------------------------------------------------------------
-// replayer — GÉNÉRATEUR DE CHARGE du banc (TP-P4).
+// replayer — GENERATEUR DE CHARGE du banc.
 //
 // Émet un flux UDP SYNTHÉTIQUE et REPRODUCTIBLE (graine fixe) sur loopback, au
 // débit / taille de ton choix, et peut injecter pertes et corruption. C'est le

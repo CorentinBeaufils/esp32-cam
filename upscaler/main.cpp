@@ -16,11 +16,11 @@
 #include <thread>
 
 // ---------------------------------------------------------------------------
-// Visualiseur AVEC UPSCALING (TP-P3).
+// Visualiseur AVEC UPSCALING.
 //
 //   ./viewer_up [port] [facteur] [budget_ms]     (defauts : 9000  2  30)
 //
-// Même squelette que le viewer du TP-P1c (réseau en fond -> LatestFrame ->
+// Meme squelette que le viewer simple (reseau en fond -> LatestFrame ->
 // affichage sur le thread principal), avec un étage en plus dans la boucle
 // d'affichage :
 //

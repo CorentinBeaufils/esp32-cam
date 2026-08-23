@@ -1,10 +1,9 @@
 #include "up/upscale_policy.hpp"
 
 // ---------------------------------------------------------------------------
-// TP-P3 — à toi de jouer (partie 2/2 : UpscalePolicy).
-//   Énoncé : ENONCE.md   Bloqué : INDICES.md   Corrigé : solution/upscale_policy.cpp
+// UpscalePolicy : controleur adaptatif de la methode d'interpolation.
 //
-// Le cœur du TP : un contrôleur de qualité adaptatif. Relis l'en-tête
+// Coeur du module : un controleur de qualite adaptatif. Voir l'en-tete
 // (upscale_policy.hpp) pour la règle ; l'ENONCE détaille l'hystérésis.
 // ---------------------------------------------------------------------------
 namespace up {
@@ -23,7 +22,7 @@ UpscalePolicy::UpscalePolicy(double budget_ms, Interp start)
     : budget_ms_(budget_ms), current_(start) {}
 
 Interp UpscalePolicy::update(double measured_ms) {
-    // TODO — trois cas :
+    // trois cas :
     //   1) measured > budget          -> good_streak_ = 0 ; descendre d'un cran
     //                                     (sans passer sous Nearest) ; ++downgrades_.
     //   2) measured < budget * 0.6    -> ++good_streak_ ; si good_streak_ atteint

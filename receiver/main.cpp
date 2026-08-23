@@ -10,7 +10,7 @@
 // ---------------------------------------------------------------------------
 // Récepteur headless : reçoit le flux UDP, réassemble, et affiche la télémétrie
 // chaque seconde. Fourni complet -- il te sert à VÉRIFIER ton Receiver contre le
-// simulateur. L'affichage des images (OpenCV) viendra au TP-P1c.
+// simulateur. L'affichage des images (OpenCV) est assure par le visualiseur.
 //
 //   ./receiver [port]          (défaut 9000)
 //

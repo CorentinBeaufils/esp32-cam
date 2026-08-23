@@ -1,10 +1,9 @@
 #include "disp/latest_frame.hpp"
 
 // ---------------------------------------------------------------------------
-// TP-P1c — à toi de jouer.   Contrat : disp/latest_frame.hpp   Corrigé : solution/
+// LatestFrame : contrat dans disp/latest_frame.hpp.
 //
-// Format allégé : pas de TODO pas-à-pas. Le contrat et les tests disent QUOI
-// faire ; à toi le COMMENT. Le seul enjeu est la sûreté entre threads.
+// Le seul enjeu ici est la surete entre threads (handoff reseau -> affichage).
 //
 // Objectif ThreadSanitizer PROPRE :
 //   cmake -S . -B build-tsan -DCMAKE_CXX_FLAGS="-fsanitize=thread -g"

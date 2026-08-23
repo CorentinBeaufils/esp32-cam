@@ -8,7 +8,7 @@
 // ScaleStats : statistiques glissantes sur le TEMPS DE TRAITEMENT d'une trame
 // (ici : le coût de l'upscale, en millisecondes).
 //
-// C'est la cousine de ta MetricsWindow (TP-P1b), mais elle ne mesure pas le
+// C'est la cousine de MetricsWindow, mais elle ne mesure pas le
 // réseau : elle mesure le COÛT CPU de ton pipeline d'affichage. On veut savoir
 // « est-ce que j'agrandis chaque image assez vite pour tenir le temps réel ? ».
 //

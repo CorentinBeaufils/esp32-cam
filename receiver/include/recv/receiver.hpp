@@ -16,7 +16,7 @@
 // Nouveauté de cette phase : la réception UDP ASYNCHRONE. L'émetteur envoyait
 // en synchrone (send_to) ; ici on reçoit en coroutine (async_receive_from), car
 // un récepteur doit rester réactif et ne jamais bloquer -- c'est tout l'intérêt
-// d'asio. On retrouve le style linéaire du TP8/TP9.
+// d'asio. Le code asynchrone se lit comme du sequentiel.
 //
 // Le Receiver assemble tout ce que tu as construit :
 //   - le Reassembler (Phase 0) pour reconstituer les trames et compter
@@ -36,7 +36,7 @@ public:
     void start();   // lance la boucle de réception (coroutine détachée)
     void stop();    // arrête proprement (ferme la socket -> operation_aborted)
 
-    // Support du banc (TP-P4) : force la taille du tampon de réception noyau
+    // Support du banc : force la taille du tampon de reception noyau
     // (SO_RCVBUF). Le noyau peut clamper à net.core.rmem_max ; la valeur
     // effectivement appliquee est renvoyee. A appeler AVANT start().
     int set_recv_buffer_bytes(int bytes);

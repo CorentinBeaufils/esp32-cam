@@ -17,7 +17,7 @@
 //   - REORDERING : fragment_index lets us place each slice ;
 //   - LATENCY    : timestamp_us stamped at send time.
 //
-// This is TP5 (framing / reassembly) moved to UDP, plus the gap handling that
+// The protocol carries framing / reassembly over UDP, plus the gap handling that
 // TCP used to hide.
 // ---------------------------------------------------------------------------
 namespace cam {

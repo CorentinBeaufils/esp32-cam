@@ -24,7 +24,7 @@
 //   - le THREAD PRINCIPAL boucle : take() -> décode -> affiche. OpenCV exige
 //     que imshow/waitKey soient sur le thread principal, d'où ce découpage.
 //
-// C'est le modèle du TP6 (pool/thread séparé) appliqué en vrai : réseau d'un
+// Modele a thread reseau separe : reseau d'un
 // côté, interface de l'autre, et un point de passage protégé au milieu.
 // ---------------------------------------------------------------------------
 
@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
     receiver.start();
 
     // Le work_guard empêche io.run() de rendre la main quand la file est vide
-    // (souvenir du TP1) : le récepteur doit rester en vie même sans trafic.
+    // le recepteur doit rester en vie meme sans trafic.
     auto guard = asio::make_work_guard(io);
     std::thread reseau([&io] { io.run(); });
 

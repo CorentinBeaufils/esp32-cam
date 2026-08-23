@@ -11,7 +11,7 @@
 #include <cstdlib>
 
 // ---------------------------------------------------------------------------
-// recv_asio — TON récepteur asio, instrumenté pour le banc (TP-P4).
+// recv_asio — recepteur asio instrumente pour le banc.
 //
 // Même CLI et même sortie CSV que recv_baseline, pour que run_bench.sh pilote
 // les deux à l'identique et qu'on aligne les lignes. La SEULE différence avec le

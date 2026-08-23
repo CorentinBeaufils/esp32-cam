@@ -23,5 +23,9 @@ firmware/src/config.h
 .DS_Store
 Thumbs.db
 
-# NB : bench/data/*.csv (données de l'expérience) et annexe-tp/ (notes) sont
-#     volontairement VERSIONNÉS — ce sont les preuves et la référence.
+# Archive pédagogique (énoncés, indices, corrigés des TP) : gardée en LOCAL
+# pour révision, mais hors dépôt.
+annexe-tp/
+
+# NB : bench/data/*.csv (données de l'expérience) reste VERSIONNÉ — ce sont
+#      les preuves derrière BILAN-BANC.md.

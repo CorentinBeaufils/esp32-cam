@@ -4,8 +4,7 @@
 #include <sstream>
 
 // ---------------------------------------------------------------------------
-// TP-P4 — à toi de jouer (RunReport : le relevé commun d'un run).
-//   Énoncé : ENONCE.md   Bloqué : INDICES.md   Corrigé : solution/run_report.cpp
+// RunReport : releve commun d'un run de reception (debit, pertes, gigue...).
 //
 // Tu remplis on_frame() et snapshot(). La sérialisation CSV est déjà écrite en
 // bas (elle ne dépend que de snapshot()). Relis l'en-tête (run_report.hpp) pour
@@ -18,7 +17,7 @@ RunReport::RunReport(std::size_t jitter_window)
     : jitter_window_(jitter_window == 0 ? 1 : jitter_window) {}
 
 void RunReport::on_frame(std::uint32_t frame_id, double arrival_ms, bool crc_ok) {
-    // TODO — pour CHAQUE trame livrée :
+    // pour CHAQUE trame livrée :
     //   1) ++delivered_ ; si !crc_ok -> ++corrupt_.
     //   2) SÉQUENCE :
     //      - 1re trame (!have_any_) : elle FIXE base_id_ et max_id_ (on ne peut
@@ -63,7 +62,7 @@ void RunReport::on_frame(std::uint32_t frame_id, double arrival_ms, bool crc_ok)
 }
 
 Report RunReport::snapshot() const {
-    // TODO — calcule le relevé à partir des compteurs :
+    // calcule le relevé à partir des compteurs :
     //   - delivered/unique(=seen_.size())/corrupt/duplicate/reordered : recopie.
     //   - PERTE : expected = (max_id_ - base_id_) + 1 ; lost = max(0, expected -
     //     unique) ; loss_pct = 100 * lost / expected (si have_any_).
