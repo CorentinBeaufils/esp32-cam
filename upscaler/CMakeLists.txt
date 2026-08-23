@@ -1,24 +1,9 @@
-# TP-P3 : upscaling classique dans le budget temps réel.
-#
-# La BIBLIOTHÈQUE upscale (ScaleStats + UpscalePolicy) est PURE (aucun OpenCV) ->
-# testable seule. Seul l'EXÉCUTABLE (le visualiseur) dépend d'OpenCV, comme au
-# TP-P1c.
-#
-#   -DUP_USE_SOLUTION=ON  -> compile la lib contre le corrigé.
-option(UP_USE_SOLUTION "Compiler l'upscaler contre le corrige" OFF)
-
-if(UP_USE_SOLUTION)
-  set(UP_SOURCES solution/scale_stats.cpp solution/upscale_policy.cpp)
-else()
-  set(UP_SOURCES src/scale_stats.cpp src/upscale_policy.cpp)
-endif()
-
-add_library(upscale STATIC ${UP_SOURCES})
+# Upscaling classique adaptatif : bibliothèque PURE (ScaleStats + UpscalePolicy),
+# testable seule ; seul le visualiseur dépend d'OpenCV.
+add_library(upscale STATIC src/scale_stats.cpp src/upscale_policy.cpp)
 target_include_directories(upscale PUBLIC include)
 target_link_libraries(upscale PRIVATE projet_warnings)
 
-# Le visualiseur avec upscaling : réseau (receiver) + handoff (display) + OpenCV.
-# Construit seulement si OpenCV est présent.
 find_package(OpenCV QUIET)
 if(OpenCV_FOUND)
   add_executable(viewer_up_app main.cpp)

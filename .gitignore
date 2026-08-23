@@ -27,5 +27,8 @@ Thumbs.db
 # pour révision, mais hors dépôt.
 annexe-tp/
 
+# Notes internes de passation (hors dépôt public, gardées en local)
+ETAT-DU-PROJET.md
+
 # NB : bench/data/*.csv (données de l'expérience) reste VERSIONNÉ — ce sont
 #      les preuves derrière BILAN-BANC.md.

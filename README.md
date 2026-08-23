@@ -1,13 +1,29 @@
 # ESP32-CAM → UDP → PC : pipeline vidéo temps réel + banc de récepteurs
 
+![CI](https://github.com/<ton-user>/esp32-cam/actions/workflows/ci.yml/badge.svg)
+
 Flux vidéo temps réel : une **ESP32-CAM** capture du JPEG, l'envoie en **UDP** vers un
 PC qui **réassemble**, mesure la télémétrie (fps, pertes, corruption, gigue), **affiche**
 (OpenCV) et **agrandit** (upscaling classique adaptatif). Le tout couronné par une
 **étude comparative mesurée de récepteurs** (bloquant vs asio) — le cœur du projet.
 
 > **Point fort du dépôt → [`BILAN-BANC.md`](BILAN-BANC.md)** : cinq manches de mesures
-> qui répondent, chiffres à l'appui, à « asio vaut-il le coup ici ? ». Graphes dans
-> [`bench/`](bench/) (`comparison*.html`).
+> qui répondent, chiffres à l'appui, à « asio vaut-il le coup ici ? ».
+
+## Résultats en un coup d'œil
+
+Montée en charge multi-flux (N récepteurs concurrents, un budget de cœurs fixe) : le
+thread-par-socket reste **sans perte** ; l'async mono-thread décroche dès N≈64.
+
+![Comparaison multi-flux](bench/charts/multiflux.png)
+
+**La cause racine n'était pas l'architecture, mais le tampon `SO_RCVBUF`.** Correctement
+dimensionné, l'asio shardé rejoint le thread-par-socket (**0 % de perte**, CPU comparable) :
+
+![Effet du tampon de réception](bench/charts/rootcause_buffer.png)
+
+Méthode complète, cinq manches et données brutes → **[`BILAN-BANC.md`](BILAN-BANC.md)**
+(graphes interactifs : [`bench/comparison*.html`](bench/)).
 
 ## Choix techniques
 
