@@ -1,0 +1,5 @@
+# Tes identifiants Wi-Fi ne doivent pas etre commites.
+src/config.h
+
+# Artefacts PlatformIO
+.pio/

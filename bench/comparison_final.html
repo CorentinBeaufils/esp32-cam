@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bilan asio vs threads</title>
+<style>
+  :root{--surface-1:#fcfcfb;--page:#f9f9f7;--text:#0b0b0b;--text2:#52514e;--muted:#898781;
+    --grid:#e1e0d9;--axis:#c3c2b7;--border:rgba(11,11,11,.10);--base:#2a78d6;--asio:#eb6834;}
+  @media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){
+    --surface-1:#1a1a19;--page:#0d0d0d;--text:#fff;--text2:#c3c2b7;--muted:#898781;
+    --grid:#2c2c2a;--axis:#383835;--border:rgba(255,255,255,.10);--base:#3987e5;--asio:#d95926;}}
+  :root[data-theme="dark"]{--surface-1:#1a1a19;--page:#0d0d0d;--text:#fff;--text2:#c3c2b7;--muted:#898781;
+    --grid:#2c2c2a;--axis:#383835;--border:rgba(255,255,255,.10);--base:#3987e5;--asio:#d95926;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
+  .wrap{max-width:920px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:1.4rem;margin:0 0 4px} .sub{color:var(--text2);font-size:.9rem;margin:0 0 20px}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin:0 0 8px;font-size:.85rem}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .sw{width:22px;height:3px;border-radius:2px;display:inline-block}
+  .panel{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 12px 6px;margin:14px 0}
+  .panel h2{font-size:.95rem;margin:2px 6px 2px;font-weight:600}
+  .panel .cap{font-size:.8rem;color:var(--text2);margin:0 6px 6px}
+  svg{width:100%;height:auto;display:block;overflow:visible}
+  .grid line{stroke:var(--grid);stroke-width:1} .axis line{stroke:var(--axis);stroke-width:1}
+  .tick{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums} .lbl{fill:var(--text2);font-size:11px}
+  .dlabel{font-size:11px;font-weight:600}
+  .callout{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--asio);border-radius:10px;padding:14px 16px;margin:18px 0;font-size:.9rem}
+  .callout b{color:var(--text)}
+  .tipbox{position:absolute;pointer-events:none;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:.78rem;box-shadow:0 4px 14px rgba(0,0,0,.14);opacity:0;transition:opacity .08s;white-space:nowrap;z-index:5}
+  .ch-line{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3;pointer-events:none;opacity:0}
+</style></head>
+<body>
+<div class="wrap">
+  <h1>Bilan : asio ne perd pas faute de cœurs — le CPU n'a jamais été le goulot</h1>
+  <p class="sub">N flux UDP, 60 fps/flux, récepteur sur 2 cœurs, 10 passes. On compare le thread-par-socket au sharding asio (M io_context indépendants). Les variantes async pool et mono-thread sont en pointillé (elles se superposent au shard).</p>
+  <div class="legend">
+    <span><i class="sw" style="background:var(--base)"></i>baseline_mt (thread / socket)</span>
+    <span><i class="sw" style="background:var(--asio)"></i>asio_shard (io_context / cœur)</span>
+    <span><i class="sw" style="background:var(--muted);height:0;border-top:2px dashed var(--muted);width:22px"></i>asio pool ≈ mono-thread</span>
+  </div>
+  <div class="panel"><h2>Perte (%)</h2><p class="cap">Les trois variantes asio (shard, pool, mono-thread) tombent sur la MÊME courbe. Sharder n'a rien changé. Le thread-par-socket reste à zéro.</p><div id="p_loss"></div></div>
+  <div class="panel"><h2>Coût CPU (% d'un cœur — 100 % = 1 cœur plein)</h2><p class="cap">Le révélateur : à N=128 tout le monde plafonne SOUS 100 %. Personne n'a saturé un cœur — donc le CPU n'est pas le goulot, et ajouter des cœurs ne pouvait pas aider.</p><div id="p_cpu"></div></div>
+  <div class="callout" id="verdict"></div>
+</div>
+<div class="tipbox" id="tip"></div>
+<script>const DATA={"N": [1, 2, 4, 8, 16, 32, 64, 128], "baseline_mt": {"loss": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.009]], "cpu": [[0.6, 0.6, 0.7], [1.1, 1.1, 1.5], [2.0, 1.9, 2.3], [4.15, 3.7, 4.3], [9.3, 8.9, 10.1], [20.5, 19.7, 21.4], [44.6, 43.0, 45.7], [88.05, 85.6, 90.5]]}, "asio_shard": {"loss": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [3.235, 2.881, 3.522], [14.885, 14.555, 15.245]], "cpu": [[0.7, 0.7, 0.8], [1.4, 1.3, 1.6], [2.35, 2.2, 2.6], [4.6, 4.0, 5.2], [9.8, 9.5, 10.5], [20.85, 19.9, 21.5], [44.05, 41.5, 44.7], [89.9, 86.5, 92.6]]}, "pool_ref": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.338, 15.547], "mux_ref": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.643, 15.549]};</script>
+<script>
+const NN=DATA.N,N=NN.length,tip=document.getElementById('tip');
+function panel(elId,metric,opts){
+  const el=document.getElementById(elId);
+  const W=900,H=290,m={t:14,r:120,b:38,l:56},iw=W-m.l-m.r,ih=H-m.t-m.b;
+  let lo=0,hi=-Infinity;
+  for(const k of ['baseline_mt','asio_shard']) for(const [md,mn,mx] of DATA[k][metric]) hi=Math.max(hi,mx);
+  if(metric==='loss') for(const v of DATA.pool_ref) hi=Math.max(hi,v);
+  if(opts.refLine!==undefined) hi=Math.max(hi,opts.refLine);
+  hi*=1.1||1;
+  const x=i=>m.l+iw*i/(N-1), y=v=>m.t+ih*(1-(v-lo)/(hi-lo));
+  const NS='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  const mk=(n,a)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+  const g=mk('g',{class:'grid'});svg.appendChild(g);
+  for(let i=0;i<=5;i++){const v=lo+(hi-lo)*i/5,yy=y(v);g.appendChild(mk('line',{x1:m.l,x2:m.l+iw,y1:yy,y2:yy}));
+    const t=mk('text',{class:'tick',x:m.l-8,y:yy+4,'text-anchor':'end'});t.textContent=opts.fmt(v);svg.appendChild(t);}
+  const ax=mk('g',{class:'axis'});ax.appendChild(mk('line',{x1:m.l,x2:m.l+iw,y1:m.t+ih,y2:m.t+ih}));svg.appendChild(ax);
+  for(let i=0;i<N;i++){const t=mk('text',{class:'tick',x:x(i),y:m.t+ih+16,'text-anchor':'middle'});t.textContent=NN[i];svg.appendChild(t);}
+  const xl=mk('text',{class:'lbl',x:m.l+iw/2,y:H-4,'text-anchor':'middle'});xl.textContent='N (nombre de flux)';svg.appendChild(xl);
+  if(opts.refLine!==undefined){const yy=y(opts.refLine);
+    svg.appendChild(mk('line',{x1:m.l,x2:m.l+iw,y1:yy,y2:yy,stroke:'var(--muted)','stroke-width':1.5,'stroke-dasharray':'5 4'}));
+    const t=mk('text',{class:'lbl',x:m.l+iw+8,y:yy+4,fill:'var(--muted)'});t.textContent=opts.refLabel;svg.appendChild(t);}
+  if(metric==='loss'){for(const [ref,lab,dash] of [[DATA.pool_ref,'',' ']]){
+    let ln='';for(let i=0;i<N;i++)ln+=(i?'L':'M')+x(i)+','+y(ref[i])+' ';
+    svg.appendChild(mk('path',{d:ln,fill:'none',stroke:'var(--muted)','stroke-width':1.4,'stroke-dasharray':'4 4'}));
+    const dl=mk('text',{class:'dlabel',x:m.l+iw+8,y:y(ref[N-1])-6,fill:'var(--muted)'});dl.textContent='pool≈1-thr';svg.appendChild(dl);}}
+  const S={baseline_mt:{c:'var(--base)',n:'baseline_mt'},asio_shard:{c:'var(--asio)',n:'asio_shard'}};
+  for(const k of ['baseline_mt','asio_shard']){const arr=DATA[k][metric];
+    let up='',dn='';for(let i=0;i<N;i++)up+=(i?'L':'M')+x(i)+','+y(arr[i][2])+' ';for(let i=N-1;i>=0;i--)dn+='L'+x(i)+','+y(arr[i][1])+' ';
+    svg.appendChild(mk('path',{d:up+dn+'Z',fill:S[k].c,opacity:.14}));
+    let ln='';for(let i=0;i<N;i++)ln+=(i?'L':'M')+x(i)+','+y(arr[i][0])+' ';
+    svg.appendChild(mk('path',{d:ln,fill:'none',stroke:S[k].c,'stroke-width':2.2,'stroke-linejoin':'round'}));
+    for(let i=0;i<N;i++)svg.appendChild(mk('circle',{cx:x(i),cy:y(arr[i][0]),r:2.6,fill:S[k].c}));
+    const off=(k==='asio_shard'&&metric==='loss')?8:4;
+    const dl=mk('text',{class:'dlabel',x:m.l+iw+8,y:y(arr[N-1][0])+off,fill:S[k].c});dl.textContent=S[k].n;svg.appendChild(dl);}
+  const ch=mk('line',{class:'ch-line',y1:m.t,y2:m.t+ih,x1:0,x2:0});svg.appendChild(ch);
+  const hit=mk('rect',{x:m.l,y:m.t,width:iw,height:ih,fill:'transparent'});svg.appendChild(hit);
+  hit.addEventListener('pointermove',ev=>{const r=svg.getBoundingClientRect(),sx=(ev.clientX-r.left)*W/r.width;
+    let bi=0,bd=1e9;for(let i=0;i<N;i++){const d=Math.abs(x(i)-sx);if(d<bd){bd=d;bi=i;}}
+    ch.setAttribute('x1',x(bi));ch.setAttribute('x2',x(bi));ch.style.opacity=1;
+    let h=`<div style="color:var(--text2)">N = ${NN[bi]} flux</div><div><span style="color:var(--base)">■</span> baseline_mt : ${opts.fmt(DATA.baseline_mt[metric][bi][0])}</div><div><span style="color:var(--asio)">■</span> asio_shard : ${opts.fmt(DATA.asio_shard[metric][bi][0])}</div>`;
+    if(metric==='loss')h+=`<div style="color:var(--muted)">┄ pool : ${opts.fmt(DATA.pool_ref[bi])}</div>`;
+    tip.innerHTML=h;tip.style.opacity=1;tip.style.left=(ev.clientX+14)+'px';tip.style.top=(ev.clientY+12)+'px';});
+  hit.addEventListener('pointerleave',()=>{ch.style.opacity=0;tip.style.opacity=0;});
+  el.appendChild(svg);
+}
+panel('p_loss','loss',{fmt:v=>v.toFixed(1)+'%'});
+panel('p_cpu','cpu',{fmt:v=>Math.round(v)+'%',refLine:100,refLabel:'1 cœur'});
+document.getElementById('verdict').innerHTML=
+ "<b>La vraie explication, enfin :</b> le CPU n'a JAMAIS été le goulot — à N=128 les trois plafonnent sous 100 % d'un cœur. Le problème n'est pas le débit de calcul mais la <b>latence de service sous rafales</b>. Le thread-par-socket draine chaque socket <i>à l'instant</i> où le paquet arrive (le noyau réveille le thread garé sur ce fd), donc le tampon ne se remplit jamais. Le chemin async (mono, pool ou shard) ajoute un aller-retour epoll→dispatch→coroutine ; quand toutes les sockets reçoivent en même temps (mon générateur envoie chaque trame à tous les flux d'un coup), le reactor les sert en file et les derniers tampons débordent. "+
+ "C'est pour ça que <b>ni le pool ni le shard n'ont aidé</b> : on ajoutait des cœurs à un problème de latence, pas de cœurs. Deux leviers <i>corrigeraient</i> l'async, aucun n'étant « plus de cœurs » : <b>agrandir SO_RCVBUF</b> (absorber la rafale) et un <b>arrivage désynchronisé</b> (de vraies caméras ne sont pas frame-lock — mon générateur l'est, c'est un artefact de test). "+
+ "<b>Conclusion du projet :</b> pour une poignée de flux UDP actifs, le recvfrom bloquant par socket est <b>structurellement le plus bas en latence</b> — asio n'a pas de terrain pour gagner ici. Son intérêt reste le c10k (des milliers de connexions surtout inactives), l'exact opposé de ce flux. Quatre récepteurs, trois manches, une réponse nette et mesurée.";
+</script>
+</body></html>

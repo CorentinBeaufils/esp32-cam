@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>asio_mux vs threads</title>
+<style>
+  :root{
+    --surface-1:#fcfcfb; --page:#f9f9f7; --text:#0b0b0b; --text2:#52514e;
+    --muted:#898781; --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
+    --base:#2a78d6; --asio:#eb6834;
+  }
+  @media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){
+    --surface-1:#1a1a19; --page:#0d0d0d; --text:#fff; --text2:#c3c2b7;
+    --muted:#898781; --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
+    --base:#3987e5; --asio:#d95926;
+  }}
+  :root[data-theme="dark"]{
+    --surface-1:#1a1a19; --page:#0d0d0d; --text:#fff; --text2:#c3c2b7;
+    --muted:#898781; --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
+    --base:#3987e5; --asio:#d95926;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
+  .wrap{max-width:920px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:1.4rem;margin:0 0 4px}
+  .sub{color:var(--text2);font-size:.9rem;margin:0 0 20px}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin:0 0 8px;font-size:.85rem}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .sw{width:22px;height:3px;border-radius:2px;display:inline-block}
+  .panel{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 12px 6px;margin:14px 0}
+  .panel h2{font-size:.95rem;margin:2px 6px 2px;font-weight:600}
+  .panel .cap{font-size:.8rem;color:var(--text2);margin:0 6px 6px}
+  svg{width:100%;height:auto;display:block;overflow:visible}
+  .grid line{stroke:var(--grid);stroke-width:1}
+  .axis line{stroke:var(--axis);stroke-width:1}
+  .tick{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+  .lbl{fill:var(--text2);font-size:11px}
+  .dlabel{font-size:11px;font-weight:600}
+  .ideal{stroke:var(--muted);stroke-width:1.5;stroke-dasharray:4 4;fill:none;opacity:.7}
+  .callout{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--base);
+    border-radius:10px;padding:14px 16px;margin:18px 0;font-size:.9rem}
+  .callout b{color:var(--text)}
+  details{margin-top:16px;font-size:.85rem}
+  summary{cursor:pointer;color:var(--text2)}
+  table{border-collapse:collapse;margin-top:10px;font-size:.8rem;width:100%;font-variant-numeric:tabular-nums}
+  th,td{border:1px solid var(--border);padding:4px 8px;text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  .ch-line{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3;pointer-events:none;opacity:0}
+  .tipbox{position:absolute;pointer-events:none;background:var(--surface-1);border:1px solid var(--border);
+    border-radius:8px;padding:7px 9px;font-size:.78rem;box-shadow:0 4px 14px rgba(0,0,0,.14);opacity:0;
+    transition:opacity .08s;white-space:nowrap;z-index:5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Banc multi-flux : async multiplexé vs thread-par-socket</h1>
+  <p class="sub">N flux UDP concurrents, 60 fps/flux (trames 8000 o), récepteur épinglé sur un cœur, 10 passes. <b>asio_mux</b> = N sockets sur 1 thread (io_context) ; <b>baseline_mt</b> = 1 thread bloquant par socket. Trait = médiane, bande = min–max.</p>
+  <div class="legend">
+    <span><i class="sw" style="background:var(--base)"></i>baseline_mt (thread / socket)</span>
+    <span><i class="sw" style="background:var(--asio)"></i>asio_mux (1 thread, N sockets)</span>
+    <span><i class="sw" style="background:var(--muted);height:0;border-top:2px dashed var(--muted);width:22px"></i>idéal</span>
+  </div>
+
+  <div class="panel"><h2>Perte (%)</h2><p class="cap">La métrique clé : à partir de N=64, l'async mono-thread sature son cœur et lâche des paquets ; le thread-par-socket reste à zéro.</p><div id="p_loss"></div></div>
+  <div class="panel"><h2>Frames livrées (% de l'offert)</h2><p class="cap">100 % = tout reçu. En dessous : soit le générateur n'a pas suivi (les deux), soit le récepteur a perdu (asio en plus).</p><div id="p_dpct"></div></div>
+  <div class="panel"><h2>Coût CPU (ms)</h2><p class="cap">Quasi identiques jusqu'à N=32. Au-delà, l'asio_mux consomme moins… parce qu'il traite moins (il jette 15 % du travail).</p><div id="p_cpu"></div></div>
+
+  <div class="callout" id="verdict"></div>
+  <details><summary>Voir les valeurs (médianes sur 10 passes)</summary><div id="tbl"></div></details>
+</div>
+<div class="tipbox" id="tip"></div>
+
+<script>const DATA={"N": [1, 2, 4, 8, 16, 32, 64, 128], "passes": 10, "baseline_mt": {"loss": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.005], [0.0, 0.0, 0.015]], "cpu": [[29.5, 26.9, 39.4], [49.75, 46.4, 54.6], [86.45, 83.7, 93.5], [175.35, 163.9, 196.8], [388.65, 372.4, 413.3], [800.15, 771.5, 845.1], [1630.9, 1560.6, 1658.9], [3171.2, 3126.2, 3276.1]], "dpct": [[100.0, 100.0, 100.0], [100.0, 100.0, 100.0], [100.0, 100.0, 100.0], [100.0, 100.0, 100.0], [100.0, 100.0, 100.0], [99.677, 99.656, 99.75], [96.549, 96.406, 96.677], [88.207, 87.958, 88.612]]}, "asio_mux": {"loss": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [3.643, 3.441, 3.751], [15.549, 15.029, 17.033]], "cpu": [[34.95, 33.4, 47.8], [54.55, 52.5, 70.3], [94.2, 87.7, 109.1], [185.5, 167.7, 198.8], [396.2, 374.9, 422.8], [797.6, 764.7, 824.9], [1492.5, 1414.1, 1503.2], [2406.85, 2264.8, 2491.8]], "dpct": [[100.0, 100.0, 100.0], [100.0, 100.0, 100.0], [100.0, 100.0, 100.0], [100.0, 100.0, 100.0], [100.0, 100.0, 100.0], [99.411, 99.25, 99.583], [92.964, 92.578, 93.391], [74.577, 72.734, 75.357]]}};</script>
+<script>
+const NN=DATA.N, N=NN.length;
+const S={baseline_mt:{c:'var(--base)',name:'baseline_mt'}, asio_mux:{c:'var(--asio)',name:'asio_mux'}};
+const tip=document.getElementById('tip');
+function panel(elId, metric, opts){
+  const el=document.getElementById(elId);
+  const W=900,H=290,m={t:14,r:96,b:38,l:54}, iw=W-m.l-m.r, ih=H-m.t-m.b;
+  let lo=Infinity,hi=-Infinity;
+  for(const k of ['baseline_mt','asio_mux']) for(const [md,mn,mx] of DATA[k][metric]){lo=Math.min(lo,mn);hi=Math.max(hi,mx);}
+  if(opts.idealTop!==undefined){hi=Math.max(hi,opts.idealTop);}
+  if(opts.zero) lo=0;
+  const pad=(hi-lo)*0.08||1; hi+=pad; if(!opts.zero) lo-=pad; if(opts.zero)lo=0;
+  const x=i=> m.l + iw*i/(N-1);
+  const y=v=> m.t + ih*(1-(v-lo)/(hi-lo));
+  const NS='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(NS,'svg'); svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  const mk=(n,a)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+  const g=mk('g',{class:'grid'}); svg.appendChild(g);
+  for(let i=0;i<=5;i++){const v=lo+(hi-lo)*i/5, yy=y(v);
+    g.appendChild(mk('line',{x1:m.l,x2:m.l+iw,y1:yy,y2:yy}));
+    const t=mk('text',{class:'tick',x:m.l-8,y:yy+4,'text-anchor':'end'}); t.textContent=opts.fmt(v); svg.appendChild(t);}
+  const ax=mk('g',{class:'axis'}); ax.appendChild(mk('line',{x1:m.l,x2:m.l+iw,y1:m.t+ih,y2:m.t+ih})); svg.appendChild(ax);
+  for(let i=0;i<N;i++){const t=mk('text',{class:'tick',x:x(i),y:m.t+ih+16,'text-anchor':'middle'}); t.textContent=NN[i]; svg.appendChild(t);}
+  const xl=mk('text',{class:'lbl',x:m.l+iw/2,y:H-4,'text-anchor':'middle'}); xl.textContent='N (nombre de flux)'; svg.appendChild(xl);
+  if(opts.ideal!==undefined){const yy=y(opts.ideal); svg.appendChild(mk('line',{class:'ideal',x1:m.l,x2:m.l+iw,y1:yy,y2:yy}));}
+  for(const k of ['baseline_mt','asio_mux']){
+    const arr=DATA[k][metric];
+    let up='',dn=''; for(let i=0;i<N;i++)up+=(i?'L':'M')+x(i)+','+y(arr[i][2])+' '; for(let i=N-1;i>=0;i--)dn+='L'+x(i)+','+y(arr[i][1])+' ';
+    svg.appendChild(mk('path',{d:up+dn+'Z',fill:S[k].c,opacity:.14,stroke:'none'}));
+    let ln=''; for(let i=0;i<N;i++)ln+=(i?'L':'M')+x(i)+','+y(arr[i][0])+' ';
+    svg.appendChild(mk('path',{d:ln,fill:'none',stroke:S[k].c,'stroke-width':2.2,'stroke-linejoin':'round'}));
+    for(let i=0;i<N;i++) svg.appendChild(mk('circle',{cx:x(i),cy:y(arr[i][0]),r:2.6,fill:S[k].c}));
+    const dl=mk('text',{class:'dlabel',x:m.l+iw+8,y:y(arr[N-1][0])+4,fill:S[k].c}); dl.textContent=S[k].name; svg.appendChild(dl);
+  }
+  const ch=mk('line',{class:'ch-line',y1:m.t,y2:m.t+ih,x1:0,x2:0}); svg.appendChild(ch);
+  const hit=mk('rect',{x:m.l,y:m.t,width:iw,height:ih,fill:'transparent'}); svg.appendChild(hit);
+  hit.addEventListener('pointermove',ev=>{
+    const r=svg.getBoundingClientRect(), sx=(ev.clientX-r.left)*W/r.width;
+    let bi=0,bd=1e9; for(let i=0;i<N;i++){const d=Math.abs(x(i)-sx);if(d<bd){bd=d;bi=i;}}
+    ch.setAttribute('x1',x(bi));ch.setAttribute('x2',x(bi));ch.style.opacity=1;
+    const b=DATA.baseline_mt[metric][bi][0], a=DATA.asio_mux[metric][bi][0];
+    tip.innerHTML=`<div style="color:var(--text2)">N = ${NN[bi]} flux</div><div><span style="color:var(--base)">■</span> baseline_mt : ${opts.fmt(b)}</div><div><span style="color:var(--asio)">■</span> asio_mux : ${opts.fmt(a)}</div>`;
+    tip.style.opacity=1; tip.style.left=(ev.clientX+14)+'px'; tip.style.top=(ev.clientY+12)+'px';
+  });
+  hit.addEventListener('pointerleave',()=>{ch.style.opacity=0;tip.style.opacity=0;});
+  el.appendChild(svg);
+}
+panel('p_loss','loss',{zero:true,fmt:v=>v.toFixed(1)+'%'});
+panel('p_dpct','dpct',{fmt:v=>Math.round(v)+'%',ideal:100,idealTop:100});
+panel('p_cpu','cpu',{zero:true,fmt:v=>Math.round(v)});
+
+document.getElementById('verdict').innerHTML=
+ "<b>Le résultat, à l'envers de l'intuition :</b> ici c'est le <b>thread-par-socket</b> qui passe l'échelle — perte nulle jusqu'à 128 flux — tandis que l'<b>async mono-thread décroche à N=64</b> (3,6 %) et s'effondre à N=128 (15,5 % de perte). La raison est structurelle : <b>un seul thread = un seul cœur</b>. Le plafond de l'asio_mux, c'est le débit paquets d'<i>un</i> cœur ; passé ~50k paquets/s agrégés, son unique boucle d'événements n'écope plus assez vite et les tampons noyau débordent. Le modèle N-threads, lui, étale le travail (et le noyau réveille le thread précis dont la socket est prête). "+
+ "<b>La vraie leçon</b> — celle qui répond enfin à ta question : l'async ne gagne pas «&nbsp;par magie&nbsp;à l'échelle&nbsp;». Il gagne sur <b>beaucoup de connexions peu actives</b> (le cas c10k : des milliers de sockets qui attendent, où lancer un thread par socket ruine la mémoire et l'ordonnanceur). Sur <b>peu de flux très chargés</b>, on est limité par le CPU, et il faut <b>plusieurs cœurs</b> — donc plusieurs threads. Le vrai design de prod n'est ni l'un ni l'autre, c'est le <b>pool</b> : un io_context tourné par M threads (M ≈ nb de cœurs) — le multiplexage d'asio ET le multicœur. Ton asio_mux à 1 thread isolait volontairement la variable «&nbsp;multiplexage&nbsp;»&nbsp;; en prod tu lances io.run() sur un pool.";
+(function(){
+  const cols=[['loss','perte %',v=>v.toFixed(2)],['dpct','livré %',v=>Math.round(v)],['cpu','CPU ms',v=>Math.round(v)]];
+  let h='<table><thead><tr><th>N</th>';
+  for(const [,nm] of cols) h+=`<th>mt ${nm}</th><th>mux ${nm}</th>`;
+  h+='</tr></thead><tbody>';
+  for(let i=0;i<N;i++){h+='<tr><td>'+NN[i]+'</td>';
+    for(const [k,,f] of cols) h+='<td>'+f(DATA.baseline_mt[k][i][0])+'</td><td>'+f(DATA.asio_mux[k][i][0])+'</td>';
+    h+='</tr>';}
+  h+='</tbody></table>'; document.getElementById('tbl').innerHTML=h;
+})();
+</script>
+</body>
+</html>

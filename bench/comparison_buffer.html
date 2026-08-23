@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>le tampon, pas l'archi</title>
+<style>
+  :root{--surface-1:#fcfcfb;--page:#f9f9f7;--text:#0b0b0b;--text2:#52514e;--muted:#898781;
+    --grid:#e1e0d9;--axis:#c3c2b7;--border:rgba(11,11,11,.10);--base:#2a78d6;--asio:#eb6834;--good:#0ca30c;}
+  @media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){
+    --surface-1:#1a1a19;--page:#0d0d0d;--text:#fff;--text2:#c3c2b7;--muted:#898781;
+    --grid:#2c2c2a;--axis:#383835;--border:rgba(255,255,255,.10);--base:#3987e5;--asio:#d95926;--good:#0ca30c;}}
+  :root[data-theme="dark"]{--surface-1:#1a1a19;--page:#0d0d0d;--text:#fff;--text2:#c3c2b7;--muted:#898781;
+    --grid:#2c2c2a;--axis:#383835;--border:rgba(255,255,255,.10);--base:#3987e5;--asio:#d95926;--good:#0ca30c;}
+  *{box-sizing:border-box} body{margin:0;background:var(--page);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
+  .wrap{max-width:920px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:1.4rem;margin:0 0 4px} .sub{color:var(--text2);font-size:.9rem;margin:0 0 20px}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin:0 0 8px;font-size:.85rem}
+  .legend span{display:inline-flex;align-items:center;gap:7px} .sw{width:22px;height:3px;border-radius:2px;display:inline-block}
+  .panel{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 12px 6px;margin:14px 0}
+  .panel h2{font-size:.95rem;margin:2px 6px 2px;font-weight:600} .panel .cap{font-size:.8rem;color:var(--text2);margin:0 6px 6px}
+  svg{width:100%;height:auto;display:block;overflow:visible}
+  .grid line{stroke:var(--grid);stroke-width:1} .axis line{stroke:var(--axis);stroke-width:1}
+  .tick{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums} .lbl{fill:var(--text2);font-size:11px}
+  .dlabel{font-size:11px;font-weight:600}
+  .callout{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--good);border-radius:10px;padding:14px 16px;margin:18px 0;font-size:.9rem} .callout b{color:var(--text)}
+  .ch-line{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3;pointer-events:none;opacity:0}
+  .tipbox{position:absolute;pointer-events:none;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:.78rem;box-shadow:0 4px 14px rgba(0,0,0,.14);opacity:0;transition:opacity .08s;white-space:nowrap;z-index:5}
+</style></head>
+<body><div class="wrap">
+  <h1>C'était le tampon, pas l'architecture</h1>
+  <p class="sub">Même banc multi-flux (2 cœurs, 60 fps/flux, 10 passes). On compare l'asio shardé avec le tampon par défaut vs un <b>SO_RCVBUF de 8 Mo</b>, face au thread-par-socket.</p>
+  <div class="legend">
+    <span><i class="sw" style="background:var(--muted);height:0;border-top:2px dashed var(--muted);width:22px"></i>asio_shard — tampon défaut</span>
+    <span><i class="sw" style="background:var(--asio)"></i>asio_shard — 8 Mo</span>
+    <span><i class="sw" style="background:var(--base)"></i>baseline_mt — 8 Mo</span>
+  </div>
+  <div class="panel"><h2>Perte (%)</h2><p class="cap">Le même code async : avec le tampon par défaut il monte à 15 % (pointillé) ; avec 8 Mo il tombe à ZÉRO, à égalité avec le thread-par-socket.</p><div id="p_loss"></div></div>
+  <div class="panel"><h2>Coût CPU (% d'un cœur)</h2><p class="cap">À gros tampon, asio_shard et thread-par-socket consomment quasi pareil. L'architecture n'était jamais le problème.</p><div id="p_cpu"></div></div>
+  <div class="callout" id="verdict"></div>
+</div>
+<div class="tipbox" id="tip"></div>
+<script>const DATA={"N": [1, 2, 4, 8, 16, 32, 64, 128], "shard_small_loss": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.235, 14.885], "shard_big_loss": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.011], [0.0, 0.0, 0.015]], "mt_big_loss": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.005], [0.0, 0.0, 0.009]], "shard_big_cpu": [[0.7, 0.7, 1.0], [1.4, 1.3, 1.7], [2.3, 2.1, 2.6], [4.6, 4.0, 5.4], [9.75, 9.1, 10.4], [20.95, 20.2, 21.6], [43.95, 42.7, 45.4], [99.4, 96.9, 101.1]], "mt_big_cpu": [[0.6, 0.5, 0.8], [1.1, 1.1, 1.3], [2.0, 1.9, 2.2], [4.05, 3.8, 4.7], [9.45, 9.1, 9.8], [20.35, 19.1, 20.8], [44.55, 42.8, 45.4], [86.9, 85.7, 90.4]]};</script>
+<script>
+const NN=DATA.N,N=NN.length,tip=document.getElementById('tip');
+function panel(elId,keys,opts){
+  const el=document.getElementById(elId);
+  const W=900,H=290,m={t:14,r:118,b:38,l:56},iw=W-m.l-m.r,ih=H-m.t-m.b;
+  let hi=-Infinity; for(const k of keys){const a=DATA[k]; for(const v of a) hi=Math.max(hi, Array.isArray(v)?v[2]:v);}
+  hi=(hi*1.12)||1; const lo=0;
+  const x=i=>m.l+iw*i/(N-1), y=v=>m.t+ih*(1-(v-lo)/(hi-lo));
+  const NS='http://www.w3.org/2000/svg';const svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  const mk=(n,a)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+  const g=mk('g',{class:'grid'});svg.appendChild(g);
+  for(let i=0;i<=5;i++){const v=lo+(hi-lo)*i/5,yy=y(v);g.appendChild(mk('line',{x1:m.l,x2:m.l+iw,y1:yy,y2:yy}));
+    const t=mk('text',{class:'tick',x:m.l-8,y:yy+4,'text-anchor':'end'});t.textContent=opts.fmt(v);svg.appendChild(t);}
+  const ax=mk('g',{class:'axis'});ax.appendChild(mk('line',{x1:m.l,x2:m.l+iw,y1:m.t+ih,y2:m.t+ih}));svg.appendChild(ax);
+  for(let i=0;i<N;i++){const t=mk('text',{class:'tick',x:x(i),y:m.t+ih+16,'text-anchor':'middle'});t.textContent=NN[i];svg.appendChild(t);}
+  const xl=mk('text',{class:'lbl',x:m.l+iw/2,y:H-4,'text-anchor':'middle'});xl.textContent='N (nombre de flux)';svg.appendChild(xl);
+  for(const spec of opts.series){const a=DATA[spec.k];
+    let ln='';for(let i=0;i<N;i++){const v=Array.isArray(a[i])?a[i][0]:a[i];ln+=(i?'L':'M')+x(i)+','+y(v)+' ';}
+    svg.appendChild(mk('path',{d:ln,fill:'none',stroke:spec.c,'stroke-width':spec.dash?1.6:2.4,'stroke-linejoin':'round',...(spec.dash?{'stroke-dasharray':'4 4'}:{})}));
+    if(!spec.dash)for(let i=0;i<N;i++){const v=Array.isArray(a[i])?a[i][0]:a[i];svg.appendChild(mk('circle',{cx:x(i),cy:y(v),r:2.6,fill:spec.c}));}
+    const lastv=Array.isArray(a[N-1])?a[N-1][0]:a[N-1];
+    const dl=mk('text',{class:'dlabel',x:m.l+iw+8,y:y(lastv)+(spec.off||4),fill:spec.c});dl.textContent=spec.n;svg.appendChild(dl);}
+  const ch=mk('line',{class:'ch-line',y1:m.t,y2:m.t+ih,x1:0,x2:0});svg.appendChild(ch);
+  const hit=mk('rect',{x:m.l,y:m.t,width:iw,height:ih,fill:'transparent'});svg.appendChild(hit);
+  hit.addEventListener('pointermove',ev=>{const r=svg.getBoundingClientRect(),sx=(ev.clientX-r.left)*W/r.width;
+    let bi=0,bd=1e9;for(let i=0;i<N;i++){const d=Math.abs(x(i)-sx);if(d<bd){bd=d;bi=i;}}
+    ch.setAttribute('x1',x(bi));ch.setAttribute('x2',x(bi));ch.style.opacity=1;
+    let h=`<div style="color:var(--text2)">N = ${NN[bi]}</div>`;
+    for(const s of opts.series){const a=DATA[s.k];const v=Array.isArray(a[bi])?a[bi][0]:a[bi];h+=`<div><span style="color:${s.c}">■</span> ${s.n} : ${opts.fmt(v)}</div>`;}
+    tip.innerHTML=h;tip.style.opacity=1;tip.style.left=(ev.clientX+14)+'px';tip.style.top=(ev.clientY+12)+'px';});
+  hit.addEventListener('pointerleave',()=>{ch.style.opacity=0;tip.style.opacity=0;});
+  el.appendChild(svg);
+}
+panel('p_loss',['shard_small_loss','shard_big_loss','mt_big_loss'],{fmt:v=>v.toFixed(1)+'%',series:[
+  {k:'shard_small_loss',c:'var(--muted)',n:'défaut',dash:true,off:-6},
+  {k:'shard_big_loss',c:'var(--asio)',n:'shard 8Mo',off:14},
+  {k:'mt_big_loss',c:'var(--base)',n:'mt 8Mo',off:4}]});
+panel('p_cpu',['shard_big_cpu','mt_big_cpu'],{fmt:v=>Math.round(v)+'%',series:[
+  {k:'shard_big_cpu',c:'var(--asio)',n:'shard 8Mo',off:-6},
+  {k:'mt_big_cpu',c:'var(--base)',n:'mt 8Mo',off:8}]});
+document.getElementById('verdict').innerHTML=
+ "<b>Ta piste était la bonne.</b> Le même récepteur asio shardé, qui perdait 15 % à N=128 avec le tampon par défaut, tombe à <b>0 % de perte</b> dès qu'on lui donne un SO_RCVBUF de 8 Mo — exactement à égalité avec le thread-par-socket, pour un CPU quasi identique. "+
+ "La perte n'était donc <b>ni un problème de CPU, ni de cœurs, ni d'architecture async</b> : c'était le <b>tampon de réception trop petit</b> face à des rafales synchronisées. Le chemin async a une latence de service un peu plus longue (epoll→dispatch→coroutine) ; il lui faut juste un tampon assez grand pour encaisser la rafale, et il redevient équivalent. "+
+ "<b>Conclusion définitive du banc :</b> correctement dimensionné (SO_RCVBUF), asio <b>tient aussi bien</b> que les threads bloquants sur ce flux — sans l'avantage décisif qu'on lui prête, mais sans le handicap non plus. Pour CE projet (peu de flux), les threads restent le choix le plus simple ; asio devient pertinent au c10k (des milliers de connexions). Cinq récepteurs, quatre manches, et une cause racine trouvée : le tampon.";
+</script>
+</body></html>

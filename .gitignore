@@ -1,0 +1,27 @@
+# Répertoires de build CMake
+/build/
+/build-*/
+build/
+
+# Firmware / PlatformIO
+firmware/.pio/
+firmware/.vscode/
+
+# IDENTIFIANTS Wi-Fi — ne JAMAIS commiter
+firmware/src/config.h
+
+# Éditeurs
+.vscode/
+.idea/
+*.user
+
+# Logs & divers
+*.log
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# NB : bench/data/*.csv (données de l'expérience) et annexe-tp/ (notes) sont
+#     volontairement VERSIONNÉS — ce sont les preuves et la référence.
