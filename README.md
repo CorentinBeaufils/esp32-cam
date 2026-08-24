@@ -1,6 +1,6 @@
 # ESP32-CAM → UDP → PC : pipeline vidéo temps réel + banc de récepteurs
 
-![CI](https://github.com/<ton-user>/esp32-cam/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/CorentinBeaufils/esp32-cam/actions/workflows/ci.yml/badge.svg)
 
 Flux vidéo temps réel : une **ESP32-CAM** capture du JPEG, l'envoie en **UDP** vers un
 PC qui **réassemble**, mesure la télémétrie (fps, pertes, corruption, gigue), **affiche**
