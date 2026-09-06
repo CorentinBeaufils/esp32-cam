@@ -1,11 +1,11 @@
 #include "disp/latest_frame.hpp"
 
 // ---------------------------------------------------------------------------
-// LatestFrame : contrat dans disp/latest_frame.hpp.
+// LatestFrame: contract in disp/latest_frame.hpp.
 //
-// Le seul enjeu ici est la surete entre threads (handoff reseau -> affichage).
+// The only challenge here is thread safety (network -> display handoff).
 //
-// Objectif ThreadSanitizer PROPRE :
+// CLEAN ThreadSanitizer target:
 //   cmake -S . -B build-tsan -DCMAKE_CXX_FLAGS="-fsanitize=thread -g"
 //   cmake --build build-tsan && ctest --test-dir build-tsan -R display
 // ---------------------------------------------------------------------------

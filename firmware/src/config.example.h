@@ -1,32 +1,32 @@
 #pragma once
 
 // ---------------------------------------------------------------------------
-// Configuration — COPIE ce fichier en "config.h" et remplis tes valeurs.
+// Configuration - COPY this file to "config.h" and fill in your values.
 //   cp src/config.example.h src/config.h
 //
-// config.h est ignoré par git (voir .gitignore) : tes identifiants Wi-Fi n'y
-// seront pas commités.
+// config.h is ignored by git (see .gitignore): your Wi-Fi credentials will not
+// be committed.
 // ---------------------------------------------------------------------------
 
 // --- Wi-Fi -----------------------------------------------------------------
-#define WIFI_SSID     "TON_RESEAU_WIFI"
-#define WIFI_PASSWORD "TON_MOT_DE_PASSE"
+#define WIFI_SSID     "YOUR_WIFI_SSID"
+#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
 
-// --- Destination : le PC qui fait tourner le recepteur ---------------------
-// Mets l'IP de ton PC sur le reseau local (ex. 192.168.1.42) et le port ecoute
-// par ton recepteur. L'ESP32 et le PC doivent etre sur le MEME reseau.
+// --- Destination: the PC running the receiver ------------------------------
+// Set the IP of your PC on the local network (e.g. 192.168.1.42) and the port
+// your receiver listens on. The ESP32 and the PC must be on the SAME network.
 #define PC_IP    "192.168.1.42"
 #define PC_PORT  9000
 
-// --- Reglages du flux ------------------------------------------------------
-// Resolution : FRAMESIZE_QVGA (320x240) tient ~25 fps ; FRAMESIZE_VGA (640x480)
-// est plus lourd (moins de fps). Commence petit.
+// --- Stream settings -------------------------------------------------------
+// Resolution: FRAMESIZE_QVGA (320x240) holds ~25 fps; FRAMESIZE_VGA (640x480)
+// is heavier (fewer fps). Start small.
 #define FRAME_SIZE   FRAMESIZE_QVGA
 
-// Qualite JPEG : 10 (haute qualite, gros) a 63 (basse, leger). 12 est un bon
-// compromis. Plus c'est leger, plus le fps est tenable.
+// JPEG quality: 10 (high quality, large) to 63 (low, light). 12 is a good
+// compromise. The lighter it is, the more sustainable the fps.
 #define JPEG_QUALITY 12
 
-// Cadence visee (images/seconde). Le firmware saute des trames s'il n'arrive
-// pas a suivre, plutot que d'accumuler du retard (comme ton Pacer).
+// Target rate (frames/second). The firmware drops frames if it can't keep up,
+// rather than accumulating lag (like your Pacer).
 #define TARGET_FPS   25

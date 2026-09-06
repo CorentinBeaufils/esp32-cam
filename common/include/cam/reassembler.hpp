@@ -10,8 +10,8 @@
 
 // ---------------------------------------------------------------------------
 // Reassembler: consumes raw UDP datagrams and emits COMPLETE JPEG frames. It
-// does NO networking -- you feed it bytes, like a byte-stream decoder. That is what
-// makes it testable without a socket or hardware.
+// does NO networking -- you feed it bytes, like a byte-stream decoder. That is
+// what makes it testable without a socket or hardware.
 //
 // Real-time handling:
 //   - it keeps at most `max_frames_in_flight` frames in progress (default 2);

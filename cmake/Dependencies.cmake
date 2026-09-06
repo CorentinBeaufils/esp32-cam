@@ -1,6 +1,6 @@
 # ---------------------------------------------------------------------------
-# Dependances, via FetchContent (comme le projet asio-tp).
-# Phase 0 : Catch2. Phase 1 : asio (reseau UDP). Phase 3 : OpenCV (systeme).
+# Dependencies, via FetchContent (like the asio-tp project).
+# Phase 0: Catch2. Phase 1: asio (UDP network). Phase 3: OpenCV (system).
 # ---------------------------------------------------------------------------
 include(FetchContent)
 

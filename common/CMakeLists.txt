@@ -1,5 +1,5 @@
 # Shared protocol library: fragmentation + reassembly.
-# Pure logic (no asio, no OpenCV) -> reusable everywhere, testable alone.
+# Pure logic (no asio, no OpenCV) -> reusable everywhere, testable in isolation.
 add_library(common STATIC
   src/protocol.cpp
   src/reassembler.cpp

@@ -5,36 +5,36 @@
 #include <deque>
 
 // ---------------------------------------------------------------------------
-// MetricsWindow : mesures temps réel sur une FENÊTRE GLISSANTE des dernières
-// trames reçues. Logique pure (aucun asio, aucune horloge interne) : on lui
-// fournit les instants, elle calcule -- donc testable exactement.
+// MetricsWindow: real-time measurements over a SLIDING WINDOW of the most
+// recent frames received. Pure logic (no asio, no internal clock): you supply
+// the timestamps, it does the computation -- so it is exactly testable.
 //
-// Ce qu'elle mesure (le reste -- pertes, corruption -- vient de cam::Telemetry,
-// déjà rempli par le Reassembler) :
-//   - le DÉBIT (fps) : nombre de trames dans la fenêtre / durée de la fenêtre ;
-//   - la LATENCE : temps entre l'émission (timestamp_us de la trame) et la
-//     réception -- moyenne sur la fenêtre ;
-//   - la GIGUE (jitter) : à quel point la latence varie (écart absolu moyen).
+// What it measures (the rest -- loss, corruption -- comes from cam::Telemetry,
+// already filled in by the Reassembler):
+//   - THROUGHPUT (fps): number of frames in the window / window duration;
+//   - LATENCY: time between the send (the frame's timestamp_us) and reception
+//     -- averaged over the window;
+//   - JITTER: how much the latency varies (mean absolute deviation).
 //
-// La fenêtre glissante évite deux écueils : une moyenne depuis le début (qui
-// lisserait tout et masquerait une dégradation récente) et une mesure
-// instantanée (trop bruitée). On regarde "la dernière seconde".
+// The sliding window avoids two pitfalls: an average from the very beginning
+// (which would smooth everything out and hide a recent degradation) and an
+// instantaneous measurement (too noisy). We look at "the last second".
 // ---------------------------------------------------------------------------
 namespace rx {
 
 class MetricsWindow {
 public:
-    // window_us : largeur de la fenêtre en microsecondes (défaut 1 s).
+    // window_us: window width in microseconds (default 1 s).
     explicit MetricsWindow(std::uint64_t window_us = 1'000'000);
 
-    // Enregistre une trame complète : instant d'émission et de réception (µs).
-    // Évince au passage les échantillons plus vieux que la fenêtre.
+    // Records a complete frame: send time and receive time (us). Also evicts
+    // any samples older than the window as it goes.
     void add(std::uint64_t emit_us, std::uint64_t recv_us);
 
-    std::size_t count() const { return samples_.size(); }  // trames dans la fenêtre
-    double fps() const;                                    // trames / seconde
-    double avg_latency_ms() const;                         // latence moyenne (ms)
-    double jitter_ms() const;                              // écart absolu moyen (ms)
+    std::size_t count() const { return samples_.size(); }  // frames in the window
+    double fps() const;                                    // frames / second
+    double avg_latency_ms() const;                         // average latency (ms)
+    double jitter_ms() const;                              // mean absolute deviation (ms)
 
 private:
     struct Sample {

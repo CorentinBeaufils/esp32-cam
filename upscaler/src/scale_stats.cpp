@@ -5,10 +5,10 @@
 #include <vector>
 
 // ---------------------------------------------------------------------------
-// ScaleStats : statistiques glissantes sur le cout d'upscale (ms).
+// ScaleStats: sliding statistics over the upscale cost (ms).
 //
-// Une fenêtre glissante par NOMBRE d'échantillons. Tu as déjà fait le cousin
-// temporel (MetricsWindow) ; ici c'est plus simple (pas d'eviction par le temps).
+// A sliding window by NUMBER of samples. You have already done the temporal
+// cousin (MetricsWindow); here it is simpler (no time-based eviction).
 // ---------------------------------------------------------------------------
 namespace up {
 
@@ -16,8 +16,8 @@ ScaleStats::ScaleStats(std::size_t window)
     : window_(window == 0 ? 1 : window) {}
 
 void ScaleStats::record(double ms) {
-    // empiler l'échantillon, puis évincer par l'avant tant que la taille
-    // dépasse window_.
+    // push the sample, then evict from the front while the size
+    // exceeds window_.
     samples_.push_back(ms);
     while (samples_.size() > window_) {
         samples_.erase(samples_.begin());
@@ -29,7 +29,7 @@ std::size_t ScaleStats::count() const {
 }
 
 double ScaleStats::avg_ms() const {
-    // moyenne des échantillons (0 si vide).
+    // average of the samples (0 if empty).
     double sum = 0.0;
     for (double sample : samples_) {
         sum += sample;
@@ -38,23 +38,23 @@ double ScaleStats::avg_ms() const {
 }
 
 double ScaleStats::max_ms() const {
-    // maximum (0 si vide). std::max_element aide.
-    return samples_.empty() ? 0.0 : *std::max_element(samples_.begin(), samples_.end()); // est ce qu'il est autorisé de derefenrcer un iterateur retourné par std::max_element ?
+    // maximum (0 if empty). std::max_element helps.
+    return samples_.empty() ? 0.0 : *std::max_element(samples_.begin(), samples_.end()); // is it allowed to dereference an iterator returned by std::max_element?
 }
 
 double ScaleStats::p95_ms() const {
-    // 95e centile "nearest-rank".
-    //   - trie une COPIE (ne réordonne pas samples_ : l'ordre chrono sert au
-    //     viewer) ;
-    //   - rang = ceil(0.95 * n), borné dans [1, n] ;
-    //   - renvoie la valeur au rang (attention : rang 1-based -> index 0-based).
+    // 95th percentile "nearest-rank".
+    //   - sorts a COPY (does not reorder samples_: the chronological order is
+    //     used by the viewer);
+    //   - rank = ceil(0.95 * n), clamped to [1, n];
+    //   - returns the value at that rank (careful: rank is 1-based -> index 0-based).
     if (samples_.empty()) {
         return 0.0;
     }
     std::deque<double> copy = samples_;
     std::sort(copy.begin(), copy.end());
     std::size_t n = copy.size();
-    std::size_t rank = static_cast<std::size_t>(std::ceil(0.95 * n)); // devrait toujours etre <= n 
+    std::size_t rank = static_cast<std::size_t>(std::ceil(0.95 * n)); // should always be <= n
 
     if (rank < 1) {
         rank = 1;
@@ -65,7 +65,7 @@ double ScaleStats::p95_ms() const {
 }
 
 std::size_t ScaleStats::over_budget(double budget_ms) const {
-    // compte les échantillons strictement au-dessus du budget.
+    // counts the samples strictly above the budget.
     std::size_t count = 0;
     for (double sample : samples_) {
         if (sample > budget_ms) {

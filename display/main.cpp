@@ -12,20 +12,20 @@
 #include <thread>
 
 // ---------------------------------------------------------------------------
-// Visualiseur : reçoit le flux UDP (thread réseau), décode le JPEG et l'affiche
-// (thread principal, imposé par OpenCV). Le pont entre les deux est ton
-// LatestFrame : « le plus récent gagne ».
+// Viewer: receives the UDP stream (network thread), decodes the JPEG and
+// displays it (main thread, required by OpenCV). The bridge between the two is
+// your LatestFrame: "most recent wins".
 //
-//   ./viewer [port]          (défaut 9000)
+//   ./viewer [port]          (default 9000)
 //
-// L'ARCHITECTURE THREADS (fournie ici) :
-//   - le Receiver et son io_context tournent sur un THREAD DE FOND ;
-//     à chaque trame complète, on la dépose dans le LatestFrame ;
-//   - le THREAD PRINCIPAL boucle : take() -> décode -> affiche. OpenCV exige
-//     que imshow/waitKey soient sur le thread principal, d'où ce découpage.
+// THE THREADING ARCHITECTURE (provided here):
+//   - the Receiver and its io_context run on a BACKGROUND THREAD;
+//     on each complete frame, we store it in the LatestFrame;
+//   - the MAIN THREAD loops: take() -> decode -> display. OpenCV requires
+//     imshow/waitKey to be on the main thread, hence this split.
 //
-// Modele a thread reseau separe : reseau d'un
-// côté, interface de l'autre, et un point de passage protégé au milieu.
+// Separate-network-thread model: network on one side, the UI on the other, and
+// a protected handoff point in the middle.
 // ---------------------------------------------------------------------------
 
 int main(int argc, char** argv) {
@@ -36,31 +36,31 @@ int main(int argc, char** argv) {
     rx::Receiver receiver(io, port);
     disp::LatestFrame latest;
 
-    // Thread RÉSEAU -> dépose chaque trame complète dans le point de passage.
+    // NETWORK thread -> stores each complete frame in the handoff point.
     receiver.on_frame = [&latest](const cam::Frame& frame) {
-        // On copie la trame dans un shared_ptr<const> : le thread d'affichage
-        // la gardera vivante le temps de la décoder, indépendamment du réseau.
+        // We copy the frame into a shared_ptr<const>: the display thread will
+        // keep it alive long enough to decode it, independently of the network.
         latest.store(std::make_shared<const cam::Frame>(frame));
     };
     receiver.start();
 
-    // Le work_guard empêche io.run() de rendre la main quand la file est vide
-    // le recepteur doit rester en vie meme sans trafic.
+    // The work_guard prevents io.run() from returning when the queue is empty
+    // the receiver must stay alive even without traffic.
     auto guard = asio::make_work_guard(io);
     std::thread reseau([&io] { io.run(); });
 
-    std::printf("Visualiseur : port %u  (touche 'q' ou Échap pour quitter)\n",
+    std::printf("Viewer: port %u  (press 'q' or Esc to quit)\n",
                 receiver.port());
 
     const std::string fenetre = "ESP32-CAM";
     cv::namedWindow(fenetre, cv::WINDOW_AUTOSIZE);
 
-    // Boucle d'AFFICHAGE, sur le thread principal.
+    // DISPLAY loop, on the main thread.
     bool quitter = false;
     while (!quitter) {
         auto frame = latest.take();
         if (frame && !frame->jpeg.empty()) {
-            // imdecode : JPEG (octets) -> image (cv::Mat), décodée en couleur.
+            // imdecode: JPEG (bytes) -> image (cv::Mat), decoded in color.
             const cv::Mat img = cv::imdecode(cv::Mat(1, static_cast<int>(frame->jpeg.size()),
                                                      CV_8U,
                                                      const_cast<std::uint8_t*>(frame->jpeg.data())),
@@ -70,16 +70,16 @@ int main(int argc, char** argv) {
             }
         }
 
-        // waitKey cède la main à OpenCV pour rafraîchir la fenêtre et lire le
-        // clavier. 1 ms : on tourne vite, l'affichage suit le flux. 'q' ou Échap
-        // pour sortir.
+        // waitKey hands control to OpenCV to refresh the window and read the
+        // keyboard. 1 ms: we run fast, the display keeps up with the stream.
+        // 'q' or Esc to exit.
         const int touche = cv::waitKey(1);
         if (touche == 'q' || touche == 27) {
             quitter = true;
         }
     }
 
-    // Arrêt propre : on stoppe le récepteur, on relâche le guard, on rejoint.
+    // Clean shutdown: stop the receiver, release the guard, join.
     receiver.stop();
     guard.reset();
     io.stop();
@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
     }
     cv::destroyAllWindows();
 
-    std::printf("Trames sautees a l'affichage (reseau plus rapide que l'ecran) : %llu\n",
+    std::printf("Frames dropped at display (network faster than screen): %llu\n",
                 static_cast<unsigned long long>(latest.dropped()));
     return 0;
 }

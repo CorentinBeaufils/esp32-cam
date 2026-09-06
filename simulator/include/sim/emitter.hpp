@@ -7,23 +7,23 @@
 #include <string>
 
 // ---------------------------------------------------------------------------
-// Emitter : envoie une trame JPEG vers le PC en UDP.
+// Emitter: sends a JPEG frame to the PC over UDP.
 //
-// C'est la nouveauté asio de cette phase : udp::socket (tout était TCP
-// jusqu'ici). UDP n'a pas de connexion -- on ouvre une socket et on envoie des
-// datagrammes vers un endpoint destination, sans handshake.
+// This is the new asio piece of this phase: udp::socket (everything was TCP
+// until now). UDP is connectionless -- we open a socket and send datagrams to a
+// destination endpoint, without a handshake.
 //
-// L'Emitter réutilise cam::fragment() (Phase 0) : une trame -> N datagrammes,
-// puis chaque datagramme part par send_to.
+// The Emitter reuses cam::fragment() (Phase 0): one frame -> N datagrams,
+// then each datagram goes out via send_to.
 // ---------------------------------------------------------------------------
 namespace sim {
 
 class Emitter {
 public:
-    // Ouvre une socket UDP et mémorise la destination (host:port).
+    // Opens a UDP socket and stores the destination (host:port).
     Emitter(asio::io_context& io, const std::string& host, unsigned short port);
 
-    // Découpe la trame JPEG et envoie tous ses datagrammes vers la destination.
+    // Splits the JPEG frame and sends all its datagrams to the destination.
     void send_frame(std::uint32_t frame_id, std::uint64_t timestamp_us,
                     const std::uint8_t* jpeg, std::size_t size);
 

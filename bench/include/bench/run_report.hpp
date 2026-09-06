@@ -6,70 +6,70 @@
 #include <unordered_set>
 
 // ---------------------------------------------------------------------------
-// RunReport : le RELEVÉ COMMUN d'un run de réception, identique quel que soit
-// le récepteur derrière (ton C++/asio, un baseline recvfrom bloquant, un jour
-// du Node...). C'est CE format qu'on compare : deux implémentations, même flux
-// rejoué, on lit les deux lignes CSV côte à côte.
+// RunReport: the COMMON REPORT of a receive run, identical whatever receiver is
+// behind it (your C++/asio one, a blocking-recvfrom baseline, some day a Node
+// one...). THIS is the format we compare: two implementations, the same stream
+// replayed, and we read the two CSV rows side by side.
 //
-// Pourquoi une classe à part alors que rx::MetricsWindow existe déjà ? Parce
-// que MetricsWindow répond à « comment ça va MAINTENANT » (fenêtre glissante,
-// interne à un récepteur). Ici on veut « comment s'est passé CE run, en un
-// enregistrement comparable » -- l'unité de comparaison du banc.
+// Why a separate class when rx::MetricsWindow already exists? Because
+// MetricsWindow answers "how are things RIGHT NOW" (sliding window, internal to
+// a receiver). Here we want "how did THIS run go, as one comparable record" --
+// the benchmark's unit of comparison.
 //
-// Le point neuf, c'est la comptabilité de SÉQUENCE à partir des frame_id :
-//   - PERTE     : des frame_id manquent dans l'intervalle observé (trous) ;
-//   - CORRUPTION: la trame est arrivée mais son payload_crc ne collait pas ;
-//   - DOUBLON   : un même frame_id livré plus d'une fois ;
-//   - DÉSORDRE  : une trame arrivée après un id supérieur déjà vu.
-// UDP ne garantit ni livraison, ni ordre, ni intégrité : ces quatre chiffres
-// sont exactement ce que le protocole (frame_id, payload_crc) permet de
-// reconstituer côté PC.
+// The new part is the SEQUENCE accounting from the frame_ids:
+//   - LOSS       : some frame_ids are missing in the observed interval (gaps);
+//   - CORRUPTION : the frame arrived but its payload_crc did not match;
+//   - DUPLICATE  : the same frame_id delivered more than once;
+//   - REORDER    : a frame arrived after a higher id had already been seen.
+// UDP guarantees neither delivery, nor order, nor integrity: these four numbers
+// are exactly what the protocol (frame_id, payload_crc) lets us reconstruct on
+// the PC side.
 //
-// Logique PURE et DÉTERMINISTE (aucun asio, aucune horloge interne : on lui
-// fournit les instants) -> testable au cas près, comme ScaleStats/MetricsWindow.
+// PURE and DETERMINISTIC logic (no asio, no internal clock: the timestamps are
+// supplied to it) -> testable to the case, like ScaleStats/MetricsWindow.
 // ---------------------------------------------------------------------------
 namespace bench {
 
-// L'enregistrement comparable. Une struct plate, sérialisable en une ligne CSV.
+// The comparable record. A flat struct, serializable as a single CSV row.
 struct Report {
-    std::uint64_t delivered = 0;   // trames complètes livrées (appels à on_frame)
-    std::uint64_t unique    = 0;   // frame_id distincts livrés
-    std::uint64_t lost      = 0;   // frame_id jamais livrés (trous dans l'intervalle)
-    std::uint64_t corrupt   = 0;   // trames livrées avec CRC KO
-    std::uint64_t duplicate = 0;   // livraisons d'un frame_id déjà vu
-    std::uint64_t reordered = 0;   // trames arrivées après un id supérieur déjà vu
-    double        seconds   = 0.0; // durée observée (1re -> dernière arrivée)
-    double        fps       = 0.0; // débit = intervalles / durée
+    std::uint64_t delivered = 0;   // complete frames delivered (calls to on_frame)
+    std::uint64_t unique    = 0;   // distinct frame_ids delivered
+    std::uint64_t lost      = 0;   // frame_ids never delivered (gaps in the interval)
+    std::uint64_t corrupt   = 0;   // frames delivered with a bad CRC
+    std::uint64_t duplicate = 0;   // deliveries of an already-seen frame_id
+    std::uint64_t reordered = 0;   // frames arrived after a higher id already seen
+    double        seconds   = 0.0; // observed duration (first -> last arrival)
+    double        fps       = 0.0; // throughput = intervals / duration
     double        loss_pct  = 0.0; // 100 * lost / expected
-    double        jitter_ms = 0.0; // écart absolu moyen des inter-arrivées
+    double        jitter_ms = 0.0; // mean absolute deviation of inter-arrivals
 };
 
 class RunReport {
 public:
-    // jitter_window : nb d'inter-arrivées gardées pour l'écart absolu moyen.
+    // jitter_window: number of inter-arrivals kept for the mean absolute deviation.
     explicit RunReport(std::size_t jitter_window = 300);
 
-    // À appeler pour CHAQUE trame complète qu'un récepteur produit.
-    //   frame_id   : cam::Header.frame_id -> sert à détecter trous/doublons/désordre
-    //   arrival_ms : instant de réception, horloge monotone du PC (ms)
-    //   crc_ok     : payload_crc validé ?
+    // To be called for EACH complete frame a receiver produces.
+    //   frame_id   : cam::Header.frame_id -> used to detect gaps/duplicates/reorder
+    //   arrival_ms : receive instant, the PC's monotonic clock (ms)
+    //   crc_ok     : payload_crc validated?
     void on_frame(std::uint32_t frame_id, double arrival_ms, bool crc_ok);
 
-    Report snapshot() const;   // calcule le relevé commun à l'instant t
+    Report snapshot() const;   // computes the common report at time t
 
-    // Sérialisation du format commun : une ligne CSV + l'en-tête assorti.
+    // Serialization of the common format: one CSV row + the matching header.
     std::string        to_csv() const;
     static std::string csv_header();
 
 private:
     std::size_t jitter_window_;
 
-    // Comptage de séquence.
+    // Sequence counting.
     bool          have_any_ = false;
-    std::uint32_t base_id_  = 0;   // premier frame_id vu
-    std::uint32_t max_id_   = 0;   // plus grand frame_id vu
-    std::uint32_t prev_id_  = 0;   // frame_id de l'appel précédent (pour le désordre)
-    std::unordered_set<std::uint32_t> seen_;   // frame_id distincts déjà livrés
+    std::uint32_t base_id_  = 0;   // first frame_id seen
+    std::uint32_t max_id_   = 0;   // largest frame_id seen
+    std::uint32_t prev_id_  = 0;   // frame_id of the previous call (for reorder)
+    std::unordered_set<std::uint32_t> seen_;   // distinct frame_ids already delivered
 
     std::uint64_t delivered_ = 0;
     std::uint64_t corrupt_   = 0;
@@ -81,7 +81,7 @@ private:
     double           first_ms_  = 0.0;
     double           last_ms_    = 0.0;
     double           prev_ms_   = 0.0;
-    std::deque<double> gaps_;      // inter-arrivées récentes (ms), bornées
+    std::deque<double> gaps_;      // recent inter-arrivals (ms), bounded
 };
 
 } // namespace bench

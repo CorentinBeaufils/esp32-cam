@@ -17,23 +17,23 @@
 #include <vector>
 
 // ---------------------------------------------------------------------------
-// recv_asio_shard — asio SHARDÉ : le design qui scale vraiment.
+// recv_asio_shard - SHARDED asio: the design that really scales.
 //
-// Au lieu d'UN io_context partagé par M threads (le pool, qui contentionne le
-// reactor), on crée M io_context INDÉPENDANTS, un par thread, chacun épinglé
-// sur son cœur. Les N sockets sont réparties (round-robin) sur les M contextes.
-// Chaque reactor epoll est privé -> aucun verrou partagé -> passage à l'échelle
-// ~linéaire avec les cœurs. C'est le modèle nginx / un-reactor-par-cœur.
+// Instead of ONE io_context shared by M threads (the pool, which contends on the
+// reactor), we create M INDEPENDENT io_contexts, one per thread, each pinned to
+// its core. The N sockets are spread (round-robin) over the M contexts. Each
+// epoll reactor is private -> no shared lock -> ~linear scaling with the cores.
+// This is the nginx / one-reactor-per-core model.
 //
 //   taskset -c 3,4 recv_asio_shard <base_port> <streams> [idle_ms=1000]
 //
-// M s'auto-règle sur les cœurs autorisés (sched_getaffinity), et chaque thread
-// worker est ré-épinglé sur UN cœur précis de cet ensemble.
+// M auto-tunes to the allowed cores (sched_getaffinity), and each worker thread
+// is re-pinned to ONE specific core of that set.
 //
-// Sûreté : chaque socket vit sur exactement un io_context/thread -> son état
-// (Reassembler, RunReport) n'est jamais touché en parallèle. Seuls les
-// compteurs globaux de fenêtre sont partagés -> atomics. L'arrêt se fait par
-// io_context::stop() (thread-safe), sans toucher aux sockets d'un autre thread.
+// Safety: each socket lives on exactly one io_context/thread -> its state
+// (Reassembler, RunReport) is never touched in parallel. Only the global window
+// counters are shared -> atomics. Shutdown happens via io_context::stop()
+// (thread-safe), without touching another thread's sockets.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -73,7 +73,7 @@ asio::awaitable<void> watchdog(std::vector<std::unique_ptr<asio::io_context>>& c
         timer.expires_after(std::chrono::milliseconds(200));
         co_await timer.async_wait(asio::use_awaitable);
         if (g_any.load() && (now_ms() - g_last.load()) > static_cast<double>(idle_ms)) {
-            for (auto& c : ctxs) c->stop();   // thread-safe, arrete tous les run()
+            for (auto& c : ctxs) c->stop();   // thread-safe, stops all the run() calls
             co_return;
         }
     }
@@ -101,14 +101,14 @@ int main(int argc, char** argv) {
     std::vector<std::unique_ptr<rx::Receiver>> rcvs;
     rcvs.reserve(static_cast<std::size_t>(streams));
     const char* rbenv = std::getenv("RCVBUF");
-    const int rb = rbenv ? std::atoi(rbenv) : 0;   // SO_RCVBUF optionnel (octets)
+    const int rb = rbenv ? std::atoi(rbenv) : 0;   // optional SO_RCVBUF (bytes)
     for (int s = 0; s < streams; ++s) {
         asio::io_context& io = *ctxs[static_cast<std::size_t>(s % M)];   // round-robin
         auto rcv = std::make_unique<rx::Receiver>(io,
             static_cast<unsigned short>(base_port + s));
         if (rb > 0) {
             const int act = rcv->set_recv_buffer_bytes(rb);
-            if (s == 0) std::fprintf(stderr, "[recv_asio_shard] SO_RCVBUF demande=%d effectif=%d\n", rb, act);
+            if (s == 0) std::fprintf(stderr, "[recv_asio_shard] SO_RCVBUF requested=%d effective=%d\n", rb, act);
         }
         bench::RunReport* rep = &reports[static_cast<std::size_t>(s)];
         rcv->on_frame = [rep](const cam::Frame& f) {
@@ -126,8 +126,8 @@ int main(int argc, char** argv) {
 
     asio::co_spawn(*ctxs[0], watchdog(ctxs, idle_ms), asio::detached);
 
-    // Un thread par io_context, épinglé sur SON cœur. ctxs[0] tourne sur le
-    // thread principal (épinglé lui aussi).
+    // One thread per io_context, pinned to ITS core. ctxs[0] runs on the main
+    // thread (also pinned).
     std::vector<std::thread> workers;
     for (int i = 1; i < M; ++i) {
         asio::io_context* c = ctxs[static_cast<std::size_t>(i)].get();
@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
     const double loss_pct = expected ? (100.0 * static_cast<double>(lost) / static_cast<double>(expected)) : 0.0;
     const double jitter_avg = streams ? jitter_sum / streams : 0.0;
 
-    std::fprintf(stderr, "[recv_asio_shard] %d io_context (1/coeur) sur coeurs autorises\n", M);
+    std::fprintf(stderr, "[recv_asio_shard] %d io_context (1/core) on allowed cores\n", M);
     std::printf("impl,streams,cpu_ms,cpu_pct,delivered,lost,corrupt,fps,loss_pct,jitter_ms\n");
     std::printf("asio_shard,%d,%.1f,%.1f,%llu,%llu,%llu,%.1f,%.4f,%.4f\n",
                 streams, cpu, cpu_pct,

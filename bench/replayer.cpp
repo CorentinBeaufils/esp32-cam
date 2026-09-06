@@ -16,26 +16,26 @@
 #include <vector>
 
 // ---------------------------------------------------------------------------
-// replayer — GENERATEUR DE CHARGE du banc.
+// replayer - the benchmark's LOAD GENERATOR.
 //
-// Émet un flux UDP SYNTHÉTIQUE et REPRODUCTIBLE (graine fixe) sur loopback, au
-// débit / taille de ton choix, et peut injecter pertes et corruption. C'est le
-// "même flux pour tout le monde" : on le rejoue à l'identique contre chaque
-// récepteur, sans jamais toucher le vrai réseau (127.0.0.1 ne quitte pas la
-// machine -> zéro risque de DoS, et aucune perte parasite : c'est TOI qui
-// décides des pertes).
+// Emits a SYNTHETIC and REPRODUCIBLE UDP stream (fixed seed) over loopback, at
+// the rate / size of your choice, and can inject loss and corruption. It is
+// the "same stream for everyone": we replay it identically against each
+// receiver, without ever touching the real network (127.0.0.1 does not leave
+// the machine -> zero risk of DoS, and no spurious loss: it is YOU who decides
+// the losses).
 //
-// Il réutilise le VRAI protocole (cam::fragment) : vrais en-têtes 30 octets,
-// vrais frame_id, vrai CRC32 -> ce que mesure le récepteur est exact.
+// It reuses the REAL protocol (cam::fragment): real 30-byte headers, real
+// frame_id, real CRC32 -> what the receiver measures is exact.
 //
 //   replayer <host> <port> <fps> <frame_bytes> <seconds>
 //            [loss_pct=0] [corrupt_pct=0] [seed=1]
 //
-// Pas d'asio : un simple socket UDP bloquant + une cadence steady_clock.
+// No asio: a plain blocking UDP socket + a steady_clock cadence.
 //
-// Note v1 : UN flux. Pour monter la charge, joue sur <fps> et <frame_bytes>
-// (plus de paquets/s), et épingle le récepteur sur un cœur faible (taskset +
-// hog). Le fan-out N flux est la molette suivante.
+// v1 note: ONE stream. To raise the load, play with <fps> and <frame_bytes>
+// (more packets/s), and pin the receiver on a weak core (taskset + hog). N-stream
+// fan-out is the next knob.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr,
             "usage: %s <host> <base_port> <fps> <frame_bytes> <seconds> "
             "[loss_pct=0] [corrupt_pct=0] [seed=1] [streams=1]\n"
-            "  streams>1 : fan-out sur base_port..base_port+streams-1 (fps PAR flux)\n",
+            "  streams>1 : fan-out over base_port..base_port+streams-1 (fps PER stream)\n",
             argv[0]);
         return 2;
     }
@@ -68,18 +68,18 @@ int main(int argc, char** argv) {
     const int         streams     = (argc > 9) ? std::atoi(argv[9]) : 1;
 
     if (fps <= 0.0 || seconds <= 0.0 || streams < 1) {
-        std::fprintf(stderr, "fps, seconds > 0 et streams >= 1\n");
+        std::fprintf(stderr, "fps, seconds > 0 and streams >= 1\n");
         return 2;
     }
 
-    // Un socket source, N destinations (base_port + s). Tous les flux partagent
-    // la meme sequence de frame_id -> les datagrammes d'une frame sont
-    // identiques d'un flux a l'autre : on fragmente UNE fois, on envoie a chacun.
+    // One source socket, N destinations (base_port + s). All streams share the
+    // same frame_id sequence -> the datagrams of a frame are identical from one
+    // stream to another: we fragment ONCE, then send to each.
     const int fd = ::socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) { std::perror("socket"); return 1; }
     in_addr host_addr{};
     if (::inet_pton(AF_INET, host.c_str(), &host_addr) != 1) {
-        std::fprintf(stderr, "host invalide: %s\n", host.c_str());
+        std::fprintf(stderr, "invalid host: %s\n", host.c_str());
         ::close(fd);
         return 2;
     }
@@ -101,11 +101,11 @@ int main(int argc, char** argv) {
 
     std::uint64_t sent_pkts = 0, dropped_pkts = 0, corrupted_pkts = 0;
 
-    // Charge utile générée UNE SEULE FOIS (le récepteur ne décode pas le
-    // contenu : il mesure la SÉQUENCE et le CRC). Régénérer 20 000 octets
-    // aléatoires par frame ferait du générateur le goulot d'étranglement bien
-    // avant le récepteur. On paie le RNG une fois, puis on ne fait plus que
-    // fragmenter + envoyer.
+    // Payload generated ONLY ONCE (the receiver does not decode the content: it
+    // measures the SEQUENCE and the CRC). Regenerating 20,000 random bytes per
+    // frame would make the generator the bottleneck well before the receiver.
+    // We pay the RNG once, then do nothing more than
+    // fragment + send.
     std::vector<std::uint8_t> jpeg(frame_bytes);
     for (auto& b : jpeg) b = static_cast<std::uint8_t>(byte(gen));
 
@@ -113,16 +113,16 @@ int main(int argc, char** argv) {
         auto datagrams = cam::fragment(static_cast<std::uint32_t>(f), now_us(),
                                        jpeg.data(), jpeg.size());
         for (auto& dg : datagrams) {
-            for (int s = 0; s < streams; ++s) {   // meme frame vers chaque flux
+            for (int s = 0; s < streams; ++s) {   // same frame to each stream
                 if (loss_pct > 0.0 && unit(gen) * 100.0 < loss_pct) {
-                    ++dropped_pkts;                       // perte simulée : on n'envoie pas
+                    ++dropped_pkts;                       // simulated loss: we don't send
                     continue;
                 }
                 if (corrupt_pct > 0.0 && dg.size() > cam::HEADER_SIZE
                     && unit(gen) * 100.0 < corrupt_pct) {
-                    // Copie locale pour ne pas abimer le datagramme des autres flux.
+                    // Local copy so as not to damage the datagram for the other streams.
                     std::vector<std::uint8_t> bad(dg);
-                    bad[cam::HEADER_SIZE] ^= 0xFF;         // CRC KO
+                    bad[cam::HEADER_SIZE] ^= 0xFF;         // bad CRC
                     ++corrupted_pkts;
                     ::sendto(fd, bad.data(), bad.size(), 0,
                              reinterpret_cast<sockaddr*>(&dsts[s]), sizeof(dsts[s]));
@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        // Cadence : viser t0 + f * période.
+        // Cadence: aim for t0 + f * period.
         const auto target = t0 + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
             std::chrono::duration<double, std::milli>(static_cast<double>(f) * period_ms));
         std::this_thread::sleep_until(target);
@@ -146,15 +146,15 @@ int main(int argc, char** argv) {
     const double achieved_fps = (elapsed > 0.0)
         ? static_cast<double>(total_frames) / elapsed : 0.0;
     std::fprintf(stderr,
-        "[replayer] offert: streams=%d frames/flux=%llu fps_cible/flux=%.1f "
-        "frame_bytes=%zu duree=%.1fs  (fps agrege=%.1f)\n"
-        "[replayer] REEL  : elapsed=%.2fs fps_atteint/flux=%.1f%s\n"
-        "[replayer] paquets: envoyes=%llu perdus(sim)=%llu corrompus(sim)=%llu "
+        "[replayer] offered: streams=%d frames/stream=%llu target_fps/stream=%.1f "
+        "frame_bytes=%zu duration=%.1fs  (aggregate_fps=%.1f)\n"
+        "[replayer] REAL  : elapsed=%.2fs fps_atteint/stream=%.1f%s\n"
+        "[replayer] packets: sent=%llu dropped(sim)=%llu corrupted(sim)=%llu "
         "loss=%.1f%% corrupt=%.1f%% seed=%u\n",
         streams, (unsigned long long)total_frames, fps, frame_bytes, seconds,
         fps * streams,
         elapsed, achieved_fps,
-        (achieved_fps < fps * 0.95 ? "  <-- generateur sature (n'atteint pas la cible/flux)" : ""),
+        (achieved_fps < fps * 0.95 ? "  <-- generator saturated (does not reach target/stream)" : ""),
         (unsigned long long)sent_pkts, (unsigned long long)dropped_pkts,
         (unsigned long long)corrupted_pkts, loss_pct, corrupt_pct, seed);
     return 0;

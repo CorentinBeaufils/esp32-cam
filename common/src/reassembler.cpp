@@ -70,7 +70,7 @@ void Reassembler::feed(const std::uint8_t* dg, std::size_t n) {
         f.data.assign(h.frame_size, 0);
         it = in_flight_.emplace(h.frame_id, std::move(f)).first;
         // Cap the number of frames in flight: if too many, the OLDEST
-        // (incomplete) is dropped -> your "buffer of 2, drop the oldest".
+        // (incomplete) is dropped -> the "buffer of 2, drop the oldest" policy.
         enforce_in_flight_limit();
         it = in_flight_.find(h.frame_id);
         if (it == in_flight_.end()) {
@@ -129,7 +129,7 @@ void Reassembler::emit(std::uint32_t frame_id, Partial& f) {
 
 void Reassembler::drop_older_than(std::uint32_t frame_id) {
     // Every frame with a STRICTLY smaller frame_id is abandoned: a newer frame
-    // is already ready, keeping them would just be latency. They count as lost.
+    // is already ready, so keeping them would only add latency. They count as lost.
     auto it = in_flight_.begin();
     while (it != in_flight_.end() && it->first < frame_id) {
         ++telemetry_.frames_lost;

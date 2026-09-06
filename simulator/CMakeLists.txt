@@ -1,4 +1,4 @@
-# Simulateur : émetteur UDP (le « faux ESP32 ») + cadenceur.
+# Simulator: UDP emitter (the "fake ESP32") + pacer.
 add_library(simulator STATIC src/pacer.cpp src/emitter.cpp)
 target_include_directories(simulator PUBLIC include)
 target_link_libraries(simulator

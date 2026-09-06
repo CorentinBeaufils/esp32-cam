@@ -1,40 +1,60 @@
-# ESP32-CAM → UDP → PC : pipeline vidéo temps réel + banc de récepteurs
+**English** · [Français](README.fr.md)
+
+# ESP32-CAM → UDP → PC: real-time video pipeline + receiver bench
 
 ![CI](https://github.com/CorentinBeaufils/esp32-cam/actions/workflows/ci.yml/badge.svg)
 
-Flux vidéo temps réel : une **ESP32-CAM** capture du JPEG, l'envoie en **UDP** vers un
-PC qui **réassemble**, mesure la télémétrie (fps, pertes, corruption, gigue), **affiche**
-(OpenCV) et **agrandit** (upscaling classique adaptatif). Le tout couronné par une
-**étude comparative mesurée de récepteurs** (bloquant vs asio) — le cœur du projet.
+Real-time video stream: an **ESP32-CAM** captures JPEG and sends it over **UDP** to a PC
+that **reassembles** it, measures telemetry (fps, loss, corruption, jitter), **displays**
+it (OpenCV), and **upscales** it (adaptive classic upscaling). All of it capped off by a
+**measured comparative study of receivers** (blocking vs asio) — the heart of the project.
 
-> **Point fort du dépôt → [`BILAN-BANC.md`](BILAN-BANC.md)** : cinq manches de mesures
-> qui répondent, chiffres à l'appui, à « asio vaut-il le coup ici ? ».
+> **The repo's highlight → [`benchmark.en.md`](docs/benchmark.en.md)**: five rounds of
+> measurements that answer, with numbers to back it up, "is asio worth it here?".
 
-## Résultats en un coup d'œil
+## Results at a glance
 
-Montée en charge multi-flux (N récepteurs concurrents, un budget de cœurs fixe) : le
-thread-par-socket reste **sans perte** ; l'async mono-thread décroche dès N≈64.
+Multi-stream ramp-up (N concurrent receivers, a fixed core budget): thread-per-socket
+stays **loss-free**; the single-thread async breaks down as early as N≈64.
 
-![Comparaison multi-flux](bench/charts/multiflux.png)
+![Multi-stream comparison](bench/charts/multiflux.png)
 
-**La cause racine n'était pas l'architecture, mais le tampon `SO_RCVBUF`.** Correctement
-dimensionné, l'asio shardé rejoint le thread-par-socket (**0 % de perte**, CPU comparable) :
+**The root cause was not the architecture, but the `SO_RCVBUF` buffer.** Sized correctly,
+the sharded asio catches up to thread-per-socket (**0% loss**, comparable CPU):
 
-![Effet du tampon de réception](bench/charts/rootcause_buffer.png)
+![Effect of the receive buffer](bench/charts/rootcause_buffer.png)
 
-Méthode complète, cinq manches et données brutes → **[`BILAN-BANC.md`](BILAN-BANC.md)**
-(graphes interactifs : [`bench/comparison*.html`](bench/)).
+Full method, five rounds, and raw data → **[`benchmark.en.md`](docs/benchmark.en.md)**
+(interactive charts: [`bench/comparison*.html`](bench/)).
 
-## Choix techniques
+## Qt dashboard & real-world conditions (Part 2)
 
-- **UDP volontaire** : en temps réel, perdre une trame vaut mieux que bloquer. Le
-  protocole porte de quoi *détecter et mesurer* ce qu'UDP ne garantit pas — en-tête
-  30 octets big-endian (`magic`, `frame_id`, `timestamp_us`, fragmentation, `payload_crc`),
-  `MAX_PAYLOAD=1200`, CRC32 par table.
-- **Réassemblage « le plus récent gagne »** (buffer 2 trames, drop-oldest) : la fraîcheur
-  prime sur la complétude.
-- **Réception asynchrone** côté PC via asio (coroutines, `async_receive_from`) — dont ce
-  dépôt montre, mesures à l'appui, les vraies limites face à un modèle bloquant.
+A **Qt dashboard** (`viewer_qt`) shows live video + stats (fps, loss, jitter, upscale
+method) + a live QtCharts graph. The network→GUI bridge is done through **inter-thread
+signals/slots** (a *queued* connection: the network thread emits, the GUI thread displays —
+never touching a widget outside the GUI thread).
+
+It was used to **characterize the link over a real radio channel** (a real ESP32-CAM + real
+WiFi), which the synthetic bench couldn't show: in line of sight the stream is perfect (0%
+loss, 25 fps), but a **concrete wall** drops it to **57% loss**. Application-level corruption
+stays at zero (the WiFi FCS already discards damaged radio frames → we only see *losses*, not
+wrong bytes).
+
+![Real-world conditions summary](bench/esp32_data/real_env/charts/reel_synthese.png)
+
+Method, 4 scenarios, and raw data → **[`real-conditions.en.md`](docs/real-conditions.en.md)**
+(CSV: [`bench/esp32_data/real_env/`](bench/esp32_data/real_env/)).
+
+## Technical choices
+
+- **UDP by design**: in real time, dropping a frame is better than blocking. The protocol
+  carries what's needed to *detect and measure* what UDP doesn't guarantee — a 30-byte
+  big-endian header (`magic`, `frame_id`, `timestamp_us`, fragmentation, `payload_crc`),
+  `MAX_PAYLOAD=1200`, table-based CRC32.
+- **"Latest wins" reassembly** (2-frame buffer, drop-oldest): freshness takes priority over
+  completeness.
+- **Asynchronous reception** on the PC side via asio (coroutines, `async_receive_from`) —
+  whose real limits, against a blocking model, this repo demonstrates with measurements.
 
 ## Architecture
 
@@ -43,23 +63,26 @@ ESP32-CAM ──JPEG/UDP──► PC : réassemblage → décodage → upscaling
                                     └────────► télémétrie (fps, pertes, gigue)
 ```
 
-Deux visualiseurs distincts consomment ce flux : `display/viewer` (affichage direct)
-et `upscaler/viewer_up` (agrandissement adaptatif **puis** affichage).
+Three viewers consume this stream: `display/viewer` (direct display),
+`upscaler/viewer_up` (adaptive upscaling **then** display), and
+`viewer_qt` (Qt dashboard: video + stats + live graph).
 
-| Module | Rôle |
+| Module | Role |
 |---|---|
-| `common/` (`cam`) | protocole : fragmentation, réassemblage, CRC, télémétrie (pur, testé) |
-| `simulator/` (`sim`) | « faux ESP32 » : émetteur UDP synthétique |
-| `receiver/` (`rx`) | récepteur asio (C++20, coroutines) + fenêtre de métriques |
-| `display/` (`disp`) | handoff thread-safe `LatestFrame` + visualiseur OpenCV |
-| `upscaler/` (`up`) | upscaling classique **adaptatif** dans le budget temps réel |
-| `bench/` | **le banc** : générateur, 5 récepteurs, métrique commune, harnais, graphes |
-| `firmware/` | firmware ESP32 réel (PlatformIO) |
+| `common/` (`cam`) | protocol: fragmentation, reassembly, CRC, telemetry (pure, tested) |
+| `simulator/` (`sim`) | "fake ESP32": synthetic UDP transmitter |
+| `receiver/` (`rx`) | asio receiver (C++20, coroutines) + metrics window |
+| `display/` (`disp`) | thread-safe `LatestFrame` handoff + OpenCV viewer |
+| `upscaler/` (`up`) | **adaptive** classic upscaling within the real-time budget |
+| `viewer_qt/` (`qtv`) | **Qt dashboard**: video + stats + live graph (inter-thread signals/slots) |
+| `bench/` | **the bench**: generator, 5 receivers, common metric, harness, charts |
+| `firmware/` | real ESP32 firmware (PlatformIO) |
+| `bench/esp32_data/real_env/` | **real-world** measurements (CSV) + analysis ([`real-conditions.en.md`](docs/real-conditions.en.md)) |
 
-> `annexe-tp/` (énoncés, indices, corrigés des TP d'origine) est conservé en local
-> pour révision mais **git-ignoré** — hors du dépôt public.
+> `annexe-tp/` (statements, hints, solutions from the original labs) is kept locally for
+> revision but **git-ignored** — outside the public repo.
 
-## Construire & lancer
+## Build & run
 
 ```bash
 cmake -S . -B build-rel -DCMAKE_BUILD_TYPE=Release
@@ -70,21 +93,23 @@ ctest --test-dir build-rel --output-on-failure     # logique pure (Catch2)
 ./build-rel/receiver/receiver 9000                 # télémétrie headless
 ./build-rel/display/viewer 9000                    # affichage
 ./build-rel/upscaler/viewer_up 9000 2 30           # affichage + upscaling x2, budget 30 ms
+./build-rel/viewer_qt/viewer_qt 9000               # dashboard Qt (vidéo + stats + graphe)
+./build-rel/receiver/receiver 9000 --csv run.csv   # mesure : journalise la télémétrie
 ```
 
-Le banc (générateur + récepteurs, sockets POSIX, sans OpenCV) : voir
-[`BILAN-BANC.md`](BILAN-BANC.md) § *Reproduire*.
+The bench (generator + receivers, POSIX sockets, no OpenCV): see
+[`benchmark.en.md`](docs/benchmark.en.md) § *Reproduce*.
 
 ## Firmware
 
-PlatformIO (`platform = espressif32`, board `esp32dev`). **Copier
-`firmware/src/config.example.h` en `config.h`** et y mettre ses identifiants Wi-Fi :
-`config.h` est **git-ignoré** (ne jamais commiter d'identifiants).
+PlatformIO (`platform = espressif32`, board `esp32dev`). **Copy
+`firmware/src/config.example.h` to `config.h`** and put your Wi-Fi credentials in it:
+`config.h` is **git-ignored** (never commit credentials).
 
-## Ce que le banc démontre (résumé)
+## What the bench demonstrates (summary)
 
-Pour une poignée de flux vidéo actifs, un `recvfrom` **bloquant par socket** est le
-choix le plus simple et le plus performant ; l'écart apparent en sa faveur en multi-flux
-venait d'un **`SO_RCVBUF` trop petit**, pas de l'architecture — correctement réglé,
-l'asio shardé **égale** les threads. asio devient pertinent au **c10k** (des milliers de
-connexions inactives), pas ici. Détails et données : [`BILAN-BANC.md`](BILAN-BANC.md).
+For a handful of active video streams, a **blocking `recvfrom` per socket** is the simplest
+and best-performing choice; the apparent gap in its favor in multi-stream came from a
+**`SO_RCVBUF` that was too small**, not from the architecture — tuned correctly, the sharded
+asio **matches** the threads. asio becomes relevant at **c10k** (thousands of idle
+connections), not here. Details and data: [`benchmark.en.md`](docs/benchmark.en.md).

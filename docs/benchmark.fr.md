@@ -1,3 +1,5 @@
+[English](benchmark.en.md) · **Français**
+
 # Banc de comparaison des récepteurs UDP — bilan
 
 Étude mesurée : **un récepteur asio (coroutines) vaut-il le coup face à un récepteur

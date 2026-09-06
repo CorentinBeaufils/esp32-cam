@@ -1,5 +1,5 @@
-# Upscaling classique adaptatif : bibliothèque PURE (ScaleStats + UpscalePolicy),
-# testable seule ; seul le visualiseur dépend d'OpenCV.
+# Adaptive classic upscaling: PURE library (ScaleStats + UpscalePolicy),
+# testable on its own; only the viewer depends on OpenCV.
 add_library(upscale STATIC src/scale_stats.cpp src/upscale_policy.cpp)
 target_include_directories(upscale PUBLIC include)
 target_link_libraries(upscale PRIVATE projet_warnings)
@@ -11,8 +11,8 @@ if(OpenCV_FOUND)
   target_link_libraries(viewer_up_app
     PRIVATE upscale display receiver ${OpenCV_LIBS} projet_warnings)
   set_target_properties(viewer_up_app PROPERTIES OUTPUT_NAME viewer_up)
-  message(STATUS "OpenCV trouve -> cible 'viewer_up' (upscaling) activee")
+  message(STATUS "OpenCV found -> target 'viewer_up' (upscaling) enabled")
 else()
-  message(STATUS "OpenCV absent -> cible 'viewer_up' desactivee "
-                 "(la lib upscale et ses tests restent compiles).")
+  message(STATUS "OpenCV missing -> target 'viewer_up' disabled "
+                 "(the upscale lib and its tests still build).")
 endif()

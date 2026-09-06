@@ -1,12 +1,12 @@
 // ---------------------------------------------------------------------------
-// Firmware ESP32-CAM : capture une image JPEG, la fragmente selon le protocole
-// PARTAGÉ du projet (cam/protocol.hpp), et l'envoie en UDP au récepteur PC.
+// ESP32-CAM firmware: captures a JPEG image, fragments it using the project's
+// SHARED protocol (cam/protocol.hpp), and sends it over UDP to the PC receiver.
 //
-// La boucle : capturer -> fragmenter -> envoyer -> cadencer. Simple, parce que
-// l'OV2640 encode le JPEG en matériel : l'ESP32 ne calcule presque rien.
+// The loop: capture -> fragment -> send -> pace. Simple, because the OV2640
+// encodes the JPEG in hardware: the ESP32 does almost no computation.
 //
-// NON compilable sur PC (framework Arduino / toolchain Xtensa) : se construit
-// et se flashe avec PlatformIO. Voir README.md.
+// NOT buildable on a PC (Arduino framework / Xtensa toolchain): build and flash
+// it with PlatformIO. See README.md.
 // ---------------------------------------------------------------------------
 #include <Arduino.h>
 #include <WiFi.h>
@@ -14,14 +14,14 @@
 #include "esp_camera.h"
 
 #include "camera_pins.h"
-#include "config.h"          // copie de config.example.h avec tes valeurs
+#include "config.h"          // copy of config.example.h with your own values
 
-#include "cam/protocol.hpp"  // MÊME en-tête / CRC que le récepteur (common/)
+#include "cam/protocol.hpp"  // SAME header / CRC as the receiver (common/)
 
 static WiFiUDP udp;
 static std::uint32_t g_frame_id = 0;
 
-// --- Initialisation de la caméra (config AI-Thinker, sortie JPEG) ----------
+// --- Camera initialisation (AI-Thinker config, JPEG output) ----------------
 static bool init_camera() {
     camera_config_t config = {};
     config.ledc_channel = LEDC_CHANNEL_0;
@@ -35,17 +35,17 @@ static bool init_camera() {
     config.pin_sccb_sda = SIOD_GPIO_NUM; config.pin_sccb_scl = SIOC_GPIO_NUM;
     config.pin_pwdn = PWDN_GPIO_NUM;  config.pin_reset = RESET_GPIO_NUM;
     config.xclk_freq_hz = 20000000;
-    config.pixel_format = PIXFORMAT_JPEG;   // <-- l'encodage se fait dans le capteur
+    config.pixel_format = PIXFORMAT_JPEG;   // <-- encoding happens in the sensor
 
-    // Avec PSRAM : deux framebuffers + résolution/qualité demandées.
+    // With PSRAM: two framebuffers + requested resolution/quality.
     if (psramFound()) {
         config.frame_size   = FRAME_SIZE;
         config.jpeg_quality = JPEG_QUALITY;
         config.fb_count     = 2;
         config.fb_location  = CAMERA_FB_IN_PSRAM;
-        config.grab_mode    = CAMERA_GRAB_LATEST;   // toujours la plus fraîche
+        config.grab_mode    = CAMERA_GRAB_LATEST;   // always the freshest one
     } else {
-        // Repli sans PSRAM : plus petit, un seul buffer.
+        // Fallback without PSRAM: smaller, single buffer.
         config.frame_size   = FRAMESIZE_QVGA;
         config.jpeg_quality = 15;
         config.fb_count     = 1;
@@ -54,25 +54,25 @@ static bool init_camera() {
 
     const esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
-        Serial.printf("Echec init camera : 0x%x (brochage ? alimentation ?)\n", err);
+        Serial.printf("Camera init failed: 0x%x (wiring? power?)\n", err);
         return false;
     }
     return true;
 }
 
-// --- Envoi d'une trame : fragmentation + UDP -------------------------------
-// On N'appelle PAS cam::fragment() (qui allouerait des vecteurs) : sur un
-// microcontrôleur, on construit chaque datagramme dans un tampon de pile et on
-// l'envoie immédiatement. Mais on réutilise cam::crc32 et cam::write_header,
-// donc les octets produits sont IDENTIQUES à ceux qu'attend le récepteur.
+// --- Sending one frame: fragmentation + UDP --------------------------------
+// We do NOT call cam::fragment() (which would allocate vectors): on a
+// microcontroller we build each datagram in a stack buffer and send it right
+// away. But we reuse cam::crc32 and cam::write_header, so the bytes produced are
+// IDENTICAL to what the receiver expects.
 static void send_frame(const std::uint8_t* jpeg, std::size_t len) {
     const std::size_t count =
         (len == 0) ? 1 : (len + cam::MAX_PAYLOAD - 1) / cam::MAX_PAYLOAD;
 
-    // micros() : horloge locale de l'ESP32 (uptime), sans rapport avec l'horloge
-    // du PC. La "latence absolue" mesurée côté PC n'aura donc pas de sens sans
-    // synchronisation d'horloge ; c'est la GIGUE et le FPS qui comptent (voir
-    // README). Le champ existe et la structure reste correcte.
+    // micros(): the ESP32's local clock (uptime), unrelated to the PC's clock.
+    // The "absolute latency" measured on the PC therefore has no meaning without
+    // clock synchronisation; JITTER and FPS are what matter (see README). The
+    // field exists and the structure stays correct.
     const std::uint64_t ts = static_cast<std::uint64_t>(micros());
 
     std::uint8_t header[cam::HEADER_SIZE];
@@ -104,29 +104,30 @@ static void send_frame(const std::uint8_t* jpeg, std::size_t len) {
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("\nESP32-CAM demarrage...");
+    Serial.println("\nESP32-CAM starting...");
 
     if (!init_camera()) {
-        // Sans caméra, rien à faire : on clignote l'erreur à l'infini.
+        // No camera, nothing to do: blink the error forever.
         while (true) { delay(1000); }
     }
 
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    Serial.printf("Connexion a %s ", WIFI_SSID);
+    WiFi.setSleep(false);
+    Serial.printf("Connecting to %s ", WIFI_SSID);
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         Serial.print(".");
     }
-    Serial.printf("\nConnecte. IP ESP32 : %s  ->  envoi vers %s:%d\n",
+    Serial.printf("\nConnected. ESP32 IP: %s  ->  sending to %s:%d\n",
                   WiFi.localIP().toString().c_str(), PC_IP, PC_PORT);
 
-    udp.begin(0);   // port local éphémère (on n'émet que)
+    udp.begin(0);   // ephemeral local port (we only send)
 }
 
 void loop() {
-    // Cadence à pas de temps fixe, même logique que ton Pacer : on vise un
-    // créneau régulier ; si on est en retard, on se resynchronise sans rafale.
+    // Fixed time-step pacing, same logic as the Pacer: aim for a regular slot;
+    // if we fall behind, resynchronise without bursting.
     static std::uint32_t next_deadline = millis();
     const std::uint32_t period_ms = (TARGET_FPS > 0) ? (1000u / TARGET_FPS) : 40u;
 
@@ -135,7 +136,20 @@ void loop() {
         if (fb->format == PIXFORMAT_JPEG) {
             send_frame(fb->buf, fb->len);
         }
-        esp_camera_fb_return(fb);   // TRÈS important : rendre le buffer, sinon fuite
+        esp_camera_fb_return(fb);   // VERY important: return the buffer or leak
+    }
+
+    // Serial heartbeat: every ~2 s, uptime + frames sent + RSSI (WiFi signal
+    // strength in dBm: ~-50 = excellent, ~-80 = weak). A sign of life when the
+    // ESP32 is wired to the PC; silent on a power bank (expected). RSSI is a
+    // bonus for the distance scenarios (worth noting per position).
+    static std::uint32_t last_log = 0;
+    if (millis() - last_log >= 2000) {
+        last_log = millis();
+        Serial.printf("[esp] up=%lus  frames=%lu  RSSI=%d dBm\n",
+                      static_cast<unsigned long>(millis() / 1000),
+                      static_cast<unsigned long>(g_frame_id),
+                      static_cast<int>(WiFi.RSSI()));
     }
 
     next_deadline += period_ms;
@@ -143,6 +157,6 @@ void loop() {
     if (wait > 0) {
         delay(static_cast<std::uint32_t>(wait));
     } else {
-        next_deadline = millis();   // en retard : on repart d'ici, pas de rafale
+        next_deadline = millis();   // behind: restart from here, no burst
     }
 }

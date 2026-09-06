@@ -16,25 +16,25 @@
 #include <vector>
 
 // ---------------------------------------------------------------------------
-// recv_asio_pool — asio a l'echelle, VERSION PROD : N sockets multiplexes sur
-// UN io_context, mais tourne par un POOL de M threads (le design que tu voulais
-// des le depart). On garde le multiplexage d'asio ET on prend plusieurs coeurs.
+// recv_asio_pool - asio at scale, PROD VERSION: N sockets multiplexed onto ONE
+// io_context, but driven by a POOL of M threads (the design you wanted from the
+// start). We keep asio's multiplexing AND we take several cores.
 //
-// M s'auto-regle sur le nombre de coeurs autorises par l'affinite du processus
-// (sched_getaffinity) : pinne-le sur 2 coeurs -> 2 threads run(). Ainsi il
-// "prend son budget" tout seul, meme CLI que les autres :
+// M auto-tunes to the number of cores allowed by the process affinity
+// (sched_getaffinity): pin it to 2 cores -> 2 run() threads. This way it
+// "takes its budget" on its own, same CLI as the others:
 //
 //   taskset -c 3,4 recv_asio_pool <base_port> <streams> [idle_ms=1000]
 //
-// A comparer a recv_baseline_mt SUR LE MEME budget de coeurs (taskset -c 3,4) :
-// c'est le vrai match, pool async vs thread-par-socket, a silicium egal.
+// To be compared with recv_baseline_mt ON THE SAME core budget (taskset -c 3,4):
+// this is the real match, async pool vs thread-per-socket, at equal silicon.
 //
-// Surete : chaque socket n'a qu'UNE operation async en vol a la fois (la
-// coroutine loop() re-arme sequentiellement), donc les handlers d'une meme
-// socket ne s'executent JAMAIS en parallele, meme sur un pool -> l'etat par
-// socket (son Reassembler, son RunReport) est touche par un seul thread a la
-// fois. Pas besoin de strand ici. Seuls les compteurs GLOBAUX de la fenetre
-// active sont partages entre threads -> atomics.
+// Safety: each socket has only ONE async operation in flight at a time (the
+// loop() coroutine re-arms sequentially), so the handlers of the same socket
+// NEVER run in parallel, even on a pool -> the per-socket state (its
+// Reassembler, its RunReport) is touched by a single thread at a time. No strand
+// needed here. Only the GLOBAL counters of the active window are shared between
+// threads -> atomics.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -63,7 +63,7 @@ int affinity_cpu_count() {
 
 std::atomic<bool>   g_any{false};
 std::atomic<double> g_last{0.0};
-double g_cpu0 = 0.0, g_wall0 = 0.0;   // ecrits une seule fois (par le gagnant du CAS)
+double g_cpu0 = 0.0, g_wall0 = 0.0;   // written only once (by the CAS winner)
 
 asio::awaitable<void> watchdog(std::vector<std::unique_ptr<rx::Receiver>>& rcvs,
                                asio::io_context& io, int idle_ms) {
@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
     const int idle_ms   = (argc > 3) ? std::atoi(argv[3]) : 1000;
     if (streams < 1) { std::fprintf(stderr, "streams >= 1\n"); return 2; }
 
-    const int pool = affinity_cpu_count();   // 1 thread run() par coeur autorise
+    const int pool = affinity_cpu_count();   // 1 run() thread per allowed core
 
     asio::io_context io;
     std::vector<bench::RunReport> reports(static_cast<std::size_t>(streams));
@@ -100,24 +100,24 @@ int main(int argc, char** argv) {
     rcvs.reserve(static_cast<std::size_t>(streams));
 
     const char* rbenv = std::getenv("RCVBUF");
-    const int rb = rbenv ? std::atoi(rbenv) : 0;   // SO_RCVBUF optionnel (octets)
+    const int rb = rbenv ? std::atoi(rbenv) : 0;   // optional SO_RCVBUF (bytes)
     for (int s = 0; s < streams; ++s) {
         auto rcv = std::make_unique<rx::Receiver>(io,
             static_cast<unsigned short>(base_port + s));
         if (rb > 0) {
             const int act = rcv->set_recv_buffer_bytes(rb);
-            if (s == 0) std::fprintf(stderr, "[recv_asio_pool] SO_RCVBUF demande=%d effectif=%d\n", rb, act);
+            if (s == 0) std::fprintf(stderr, "[recv_asio_pool] SO_RCVBUF requested=%d effective=%d\n", rb, act);
         }
         bench::RunReport* rep = &reports[static_cast<std::size_t>(s)];
         rcv->on_frame = [rep](const cam::Frame& f) {
             bool expected = false;
             if (g_any.compare_exchange_strong(expected, true)) {
-                g_cpu0 = cpu_ms_self();   // une seule fois, par le 1er handler
+                g_cpu0 = cpu_ms_self();   // only once, by the first handler
                 g_wall0 = now_ms();
             }
             const double t = now_ms();
             g_last.store(t);
-            rep->on_frame(f.frame_id, t, true);   // etat par-socket : mono-thread
+            rep->on_frame(f.frame_id, t, true);   // per-socket state: single-threaded
         };
         rcv->start();
         rcvs.push_back(std::move(rcv));
@@ -125,11 +125,11 @@ int main(int argc, char** argv) {
 
     asio::co_spawn(io, watchdog(rcvs, io, idle_ms), asio::detached);
 
-    // Le POOL : M threads tournent le MEME io_context. Les completions des N
-    // sockets sont distribuees sur les threads libres -> multicoeur.
+    // The POOL: M threads run the SAME io_context. The completions of the N
+    // sockets are distributed across the free threads -> multicore.
     std::vector<std::thread> workers;
     for (int i = 1; i < pool; ++i) workers.emplace_back([&io]{ io.run(); });
-    io.run();                                  // ce thread compte aussi
+    io.run();                                  // this thread counts too
     for (auto& w : workers) w.join();
 
     const double cpu  = g_any.load() ? (cpu_ms_self() - g_cpu0) : 0.0;
@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
     const double loss_pct = expected ? (100.0 * static_cast<double>(lost) / static_cast<double>(expected)) : 0.0;
     const double jitter_avg = streams ? jitter_sum / streams : 0.0;
 
-    std::fprintf(stderr, "[recv_asio_pool] pool=%d threads (coeurs autorises)\n", pool);
+    std::fprintf(stderr, "[recv_asio_pool] pool=%d threads (allowed cores)\n", pool);
     std::printf("impl,streams,cpu_ms,cpu_pct,delivered,lost,corrupt,fps,loss_pct,jitter_ms\n");
     std::printf("asio_pool,%d,%.1f,%.1f,%llu,%llu,%llu,%.1f,%.4f,%.4f\n",
                 streams, cpu, cpu_pct,

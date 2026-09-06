@@ -7,36 +7,36 @@
 #include <mutex>
 
 // ---------------------------------------------------------------------------
-// LatestFrame : point de passage thread-safe entre le thread RÉSEAU (qui
-// produit des trames complètes) et le thread d'AFFICHAGE (qui les consomme à
-// son propre rythme).
+// LatestFrame: a thread-safe handoff point between the NETWORK thread (which
+// produces complete frames) and the DISPLAY thread (which consumes them at its
+// own pace).
 //
-// Politique « le plus récent gagne » : si une nouvelle trame arrive avant que
-// l'affichage ait consommé la précédente, on ÉCRASE l'ancienne. En temps réel,
-// afficher une image périmée n'a aucun intérêt -- on veut toujours la plus
-// fraîche. C'est ton buffer « drop the oldest » du tout début, appliqué à la
-// frontière réseau/affichage.
+// "Most recent wins" policy: if a new frame arrives before the display has
+// consumed the previous one, we OVERWRITE the old one. In real time, showing a
+// stale image is pointless -- we always want the freshest one. This is the
+// "drop the oldest" buffer from the very beginning, applied at the
+// network/display boundary.
 //
-// Deux threads y accèdent en même temps : store() et take() DOIVENT être
-// protégés. C'est le seul vrai enjeu de ce fichier -- et il se teste sous
-// ThreadSanitizer.
+// Two threads access it at the same time: store() and take() MUST be
+// protected. That is the only real challenge in this file -- and it is tested
+// under ThreadSanitizer.
 //
-// On échange des std::shared_ptr<const cam::Frame> : la trame est immuable et
-// partagée, donc ni copie coûteuse ni course sur son contenu.
+// We exchange std::shared_ptr<const cam::Frame>: the frame is immutable and
+// shared, so there is neither an expensive copy nor a race on its content.
 // ---------------------------------------------------------------------------
 namespace disp {
 
 class LatestFrame {
 public:
-    // Appelé par le thread RÉSEAU. Remplace la trame en attente (le cas échéant).
+    // Called by the NETWORK thread. Replaces the pending frame (if any).
     void store(std::shared_ptr<const cam::Frame> frame);
 
-    // Appelé par le thread d'AFFICHAGE. Renvoie la dernière trame déposée et
-    // vide le slot ; renvoie nullptr s'il n'y a rien de nouveau.
+    // Called by the DISPLAY thread. Returns the last frame stored and empties
+    // the slot; returns nullptr if there is nothing new.
     std::shared_ptr<const cam::Frame> take();
 
-    // Nombre de trames écrasées sans avoir été consommées (télémétrie :
-    // « l'affichage ne suit pas le réseau »).
+    // Number of frames overwritten without having been consumed (telemetry:
+    // "the display is not keeping up with the network").
     std::uint64_t dropped() const;
 
 private:

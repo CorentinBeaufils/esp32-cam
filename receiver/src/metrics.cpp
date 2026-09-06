@@ -2,21 +2,21 @@
 #include <cmath>
 
 // ---------------------------------------------------------------------------
-// MetricsWindow : metriques temps reel sur une fenetre glissante de trames.
+// MetricsWindow: real-time metrics over a sliding window of frames.
 // ---------------------------------------------------------------------------
 namespace rx {
 
 MetricsWindow::MetricsWindow(std::uint64_t window_us) : window_us_(window_us) {}
 
 void MetricsWindow::add(std::uint64_t emit_us, std::uint64_t recv_us) {
-    //   - latence en ms = (recv_us - emit_us) / 1000. Attention : recv et emit
-    //     sont des uint64 -> calcule la différence en SIGNÉ pour éviter un
-    //     débordement si recv < emit (dérive d'horloge), et borne à >= 0.
-    //   - empiler {recv_us, latence}
-    //   - évincer par l'avant tant que le plus ancien est plus vieux que la
-    //     fenêtre : front.recv_us + window_us_ < recv_us
+    //   - latency in ms = (recv_us - emit_us) / 1000. Note: recv and emit are
+    //     uint64 -> compute the difference as SIGNED to avoid overflow if
+    //     recv < emit (clock drift), and clamp to >= 0.
+    //   - push {recv_us, latency}
+    //   - evict from the front while the oldest is older than the window:
+    //     front.recv_us + window_us_ < recv_us
     double latency_ms = (static_cast<std::int64_t>(recv_us) - static_cast<std::int64_t>(emit_us)) / 1000.0;
-    //voir pour cast en un type plus grand pour le debordement ?
+    // consider casting to a larger type for the overflow?
     if (latency_ms < 0) {
         latency_ms = 0;
     }
@@ -29,7 +29,7 @@ void MetricsWindow::add(std::uint64_t emit_us, std::uint64_t recv_us) {
 }
 
 double MetricsWindow::fps() const {
-    // nombre d'échantillons / (window_us_ en secondes).
+    // number of samples / (window_us_ in seconds).
     if (window_us_ <= 0) {
         return 0.0; 
     }
@@ -37,7 +37,7 @@ double MetricsWindow::fps() const {
 }
 
 double MetricsWindow::avg_latency_ms() const {
-    // moyenne des latency_ms (0 si vide).
+    // average of the latency_ms values (0 if empty).
     if (samples_.empty()) {
         return 0.0;
     }
@@ -49,8 +49,8 @@ double MetricsWindow::avg_latency_ms() const {
 }
 
 double MetricsWindow::jitter_ms() const {
-    // écart absolu moyen des latences autour de leur moyenne
-    //   ( moyenne de |latence_i - moyenne| ), 0 si vide.
+    // mean absolute deviation of the latencies around their mean
+    //   ( mean of |latency_i - mean| ), 0 if empty.
     if (samples_.empty()) {
         return 0.0;
     }

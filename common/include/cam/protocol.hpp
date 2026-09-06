@@ -10,15 +10,15 @@
 // A JPEG frame is split into UDP DATAGRAMS. Each carries a fixed-size header
 // (big-endian, network order) followed by a slice of the JPEG.
 //
-// UDP guarantees neither delivery, order, nor integrity -- on purpose (real
+// UDP guarantees neither delivery, order, nor integrity -- by design (real
 // time). The protocol therefore carries what is needed to detect and measure:
-//   - LOSS       : gaps in fragment_index / frame_id ;
-//   - CORRUPTION : a payload_crc that does not match ;
-//   - REORDERING : fragment_index lets us place each slice ;
+//   - LOSS       : gaps in fragment_index / frame_id;
+//   - CORRUPTION : a payload_crc that does not match;
+//   - REORDERING : fragment_index lets us place each slice;
 //   - LATENCY    : timestamp_us stamped at send time.
 //
-// The protocol carries framing / reassembly over UDP, plus the gap handling that
-// TCP used to hide.
+// The protocol handles framing and reassembly over UDP, plus the gap handling
+// that TCP used to hide.
 // ---------------------------------------------------------------------------
 namespace cam {
 

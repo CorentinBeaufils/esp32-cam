@@ -11,22 +11,22 @@
 #include <cstdlib>
 
 // ---------------------------------------------------------------------------
-// recv_asio — recepteur asio instrumente pour le banc.
+// recv_asio - asio receiver instrumented for the benchmark.
 //
-// Même CLI et même sortie CSV que recv_baseline, pour que run_bench.sh pilote
-// les deux à l'identique et qu'on aligne les lignes. La SEULE différence avec le
-// vrai `receiver`, c'est qu'ici on branche bench::RunReport sur le callback
-// on_frame (déjà exposé par rx::Receiver) et qu'on s'arrête sur idle.
+// Same CLI and same CSV output as recv_baseline, so that run_bench.sh drives
+// both identically and we can line the rows up. The ONLY difference from the
+// real `receiver` is that here we wire bench::RunReport onto the on_frame
+// callback (already exposed by rx::Receiver) and stop on idle.
 //
 //   recv_asio <port> [idle_ms=1000]
 //
-// À noter (différence de POLITIQUE, pas de mesure) : ton Reassembler REJETTE les
-// fragments au CRC KO et ne garde que 2 trames en vol (le plus récent gagne).
-// Donc une trame corrompue n'est jamais émise -> elle compte comme PERDUE ici,
-// alors que le baseline la livre en la marquant `corrupt`. Pour comparer le
-// DÉBIT/CPU proprement, lance le balayage sans corruption (CORRUPT=0) : la seule
-// perte est alors celle induite par la charge (débordement du tampon noyau),
-// que les deux comptent de la même façon (trous de frame_id).
+// Note (a difference in POLICY, not in measurement): your Reassembler REJECTS
+// fragments with a bad CRC and keeps only 2 frames in flight (most recent
+// wins). So a corrupted frame is never emitted -> it counts as LOST here,
+// whereas the baseline delivers it and marks it `corrupt`. To compare
+// THROUGHPUT/CPU cleanly, run the sweep without corruption (CORRUPT=0): the only
+// loss is then the one induced by load (kernel buffer overflow), which both
+// count the same way (gaps in frame_id).
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -45,9 +45,9 @@ double cpu_ms_self() {
     return u + s;
 }
 
-// Chien de garde : coupe l'io_context apres `idle_ms` sans nouvelle trame (une
-// fois qu'au moins une est arrivee). Fonction LIBRE prenant des references (pas
-// une lambda-coroutine : ca eviterait le piege de capture detruite).
+// Watchdog: shuts down the io_context after `idle_ms` with no new frame (once
+// at least one has arrived). A FREE function taking references (not a
+// coroutine-lambda: that avoids the destroyed-capture pitfall).
 asio::awaitable<void> watchdog(rx::Receiver& rcv, asio::io_context& io,
                                const bool& got_any, const double& last_ms,
                                int idle_ms) {
@@ -78,7 +78,7 @@ int main(int argc, char** argv) {
     asio::io_context io;
     bench::RunReport report;
 
-    // Fenetre active (1er -> dernier paquet) pour un CPU% honnete, comme baseline.
+    // Active window (first -> last packet) for an honest CPU%, like the baseline.
     bool   got_any  = false;
     double cpu0     = 0.0;
     double wall0    = 0.0;
@@ -88,15 +88,15 @@ int main(int argc, char** argv) {
     receiver.on_frame = [&](const cam::Frame& f) {
         if (!got_any) { got_any = true; cpu0 = cpu_ms_self(); wall0 = now_ms(); }
         wall_last = now_ms();
-        // Les trames emises sont completes ET valides (CRC OK par construction du
-        // Reassembler) -> crc_ok = true.
+        // The emitted frames are complete AND valid (CRC OK by construction of
+        // the Reassembler) -> crc_ok = true.
         report.on_frame(f.frame_id, wall_last, true);
     };
 
     receiver.start();
     asio::co_spawn(io, watchdog(receiver, io, got_any, wall_last, idle_ms),
                    asio::detached);
-    io.run();   // un seul thread -> comparable au baseline mono-thread
+    io.run();   // a single thread -> comparable to the single-threaded baseline
 
     const double cpu  = got_any ? (cpu_ms_self() - cpu0) : 0.0;
     const double wall = (wall_last > wall0) ? (wall_last - wall0) : 0.0;

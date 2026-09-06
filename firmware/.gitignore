@@ -1,5 +1,69 @@
-# Tes identifiants Wi-Fi ne doivent pas etre commites.
-src/config.h
+# ---------------------------------------------------------------------------
+# Build directories (CMake)
+# ---------------------------------------------------------------------------
+/build/
+/build-*/
+build/
+/nuild/            # stray build dir from a typo — never commit build output
 
-# Artefacts PlatformIO
-.pio/
+# CMake / compilation artifacts (in case a build is ever run in-tree)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+*.o
+*.a
+*.obj
+
+# ---------------------------------------------------------------------------
+# Firmware / PlatformIO
+# ---------------------------------------------------------------------------
+firmware/.pio/
+firmware/.vscode/
+
+# WiFi CREDENTIALS — NEVER commit
+firmware/src/config.h
+
+# ---------------------------------------------------------------------------
+# Editors / IDEs
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.user
+*.swp
+*.swo
+*~
+*.orig
+*.rej
+
+# ---------------------------------------------------------------------------
+# Python (analysis script: bench/esp32_data/real_env/analyze.py)
+# ---------------------------------------------------------------------------
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ---------------------------------------------------------------------------
+# Logs & misc
+# ---------------------------------------------------------------------------
+*.log
+*.tmp
+
+# ---------------------------------------------------------------------------
+# OS
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------------------
+# Local-only material (kept on disk, out of the repo)
+# ---------------------------------------------------------------------------
+# Teaching archive (exercises, hints, solutions of the original labs)
+annexe-tp/
+# Internal handoff / status notes
+ETAT-DU-PROJET.md
+HANDOFF-QT.md
+
+# NB: bench/data/*.csv and bench/esp32_data/**/*.csv (experiment data) stay
+#     VERSIONED — they are the evidence behind the reports in docs/.

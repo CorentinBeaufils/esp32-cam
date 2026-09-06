@@ -13,19 +13,19 @@
 #include <vector>
 
 // ---------------------------------------------------------------------------
-// recv_asio_mux — TON asio, mais a l'echelle : N flux MULTIPLEXES sur UN SEUL
-// thread (banc multi-flux P4).
+// recv_asio_mux - YOUR asio, but at scale: N streams MULTIPLEXED onto ONE
+// SINGLE thread (multi-stream benchmark P4).
 //
-// On instancie N fois ta classe rx::Receiver, TOUTES sur le meme io_context,
-// et on lance io.run() sur un unique thread : asio jongle avec les N sockets
-// tout seul (async_receive_from). C'est exactement l'inverse du modele
-// thread-par-socket (recv_baseline_mt) -- et c'est le terrain ou l'async est
-// cense gagner quand N grimpe.
+// We instantiate your rx::Receiver class N times, ALL on the same io_context,
+// and run io.run() on a single thread: asio juggles the N sockets on its own
+// (async_receive_from). This is exactly the opposite of the thread-per-socket
+// model (recv_baseline_mt) -- and it is the ground where async is supposed to
+// win as N grows.
 //
 //   recv_asio_mux <base_port> <streams> [idle_ms=1000]
 //
-// Meme ligne CSV agregee que recv_baseline_mt -> comparables directement.
-// Un seul thread => pas d'atomics, tout se passe sur le thread de l'io_context.
+// Same aggregated CSV row as recv_baseline_mt -> directly comparable.
+// A single thread => no atomics, everything runs on the io_context's thread.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -81,13 +81,13 @@ int main(int argc, char** argv) {
     double last_ms  = 0.0;
 
     const char* rbenv = std::getenv("RCVBUF");
-    const int rb = rbenv ? std::atoi(rbenv) : 0;   // SO_RCVBUF optionnel (octets)
+    const int rb = rbenv ? std::atoi(rbenv) : 0;   // optional SO_RCVBUF (bytes)
     for (int s = 0; s < streams; ++s) {
         auto rcv = std::make_unique<rx::Receiver>(io,
             static_cast<unsigned short>(base_port + s));
         if (rb > 0) {
             const int act = rcv->set_recv_buffer_bytes(rb);
-            if (s == 0) std::fprintf(stderr, "[recv_asio_mux] SO_RCVBUF demande=%d effectif=%d\n", rb, act);
+            if (s == 0) std::fprintf(stderr, "[recv_asio_mux] SO_RCVBUF requested=%d effective=%d\n", rb, act);
         }
         bench::RunReport* rep = &reports[static_cast<std::size_t>(s)];
         rcv->on_frame = [&, rep](const cam::Frame& f) {
@@ -100,7 +100,7 @@ int main(int argc, char** argv) {
     }
 
     asio::co_spawn(io, watchdog(rcvs, io, got_any, last_ms, idle_ms), asio::detached);
-    io.run();   // UN SEUL thread pour les N flux
+    io.run();   // ONE SINGLE thread for the N streams
 
     const double cpu  = got_any ? (cpu_ms_self() - cpu0) : 0.0;
     const double wall = (last_ms > wall0) ? (last_ms - wall0) : 0.0;

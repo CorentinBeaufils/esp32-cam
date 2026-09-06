@@ -17,23 +17,23 @@
 #include <vector>
 
 // ---------------------------------------------------------------------------
-// recv_baseline — le RECEPTEUR ETALON.
+// recv_baseline - the REFERENCE RECEIVER.
 //
-// Volontairement NAÏF : un socket UDP bloquant, une boucle recvfrom, un
-// réassemblage minimal (une map frame_id -> fragments reçus). AUCUN asio,
-// aucune coroutine, aucun réassemblage "le plus récent gagne". C'est le point
-// de comparaison "bête" face à ton récepteur soigné : à charge égale, est-ce
-// que le tien fait mieux, et de combien ?
+// Deliberately NAIVE: one blocking UDP socket, one recvfrom loop, minimal
+// reassembly (a map frame_id -> received fragments). NO asio, no coroutines, no
+// "most recent wins" reassembly. It is the "dumb" point of comparison against
+// your polished receiver: at equal load, does yours do better, and by how much?
 //
-// Il émet le RELEVÉ COMMUN (bench::RunReport -> CSV), plus deux colonnes que
-// SEUL l'exécutable connaît : l'implémentation et le CPU consommé (getrusage).
-// Ton récepteur asio émettra EXACTEMENT le même format -> on aligne les lignes.
+// It emits the COMMON REPORT (bench::RunReport -> CSV), plus two columns that
+// ONLY the executable knows: the implementation and the CPU consumed
+// (getrusage). Your asio receiver emits EXACTLY the same format -> we line the
+// rows up.
 //
 //   recv_baseline <port> [idle_ms=1000]
 //
-// S'arrête après <idle_ms> sans paquet (via SO_RCVTIMEO), une fois qu'au moins
-// une trame est arrivée -> le harness lance le replayer, puis le baseline
-// finit tout seul et imprime sa ligne.
+// Stops after <idle_ms> with no packet (via SO_RCVTIMEO), once at least one
+// frame has arrived -> the harness launches the replayer, then the baseline
+// finishes on its own and prints its row.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -52,12 +52,12 @@ double cpu_ms_self() {
     return u + s;
 }
 
-// Réassemblage minimal d'UNE trame en cours.
+// Minimal reassembly of ONE frame in progress.
 struct Partial {
-    std::uint16_t count = 0;      // fragments attendus
-    std::uint16_t have  = 0;      // fragments distincts reçus
-    bool          bad   = false;  // au moins un fragment au CRC KO
-    std::vector<bool> got;        // présence par fragment_index
+    std::uint16_t count = 0;      // expected fragments
+    std::uint16_t have  = 0;      // distinct fragments received
+    bool          bad   = false;  // at least one fragment with a bad CRC
+    std::vector<bool> got;        // presence by fragment_index
 };
 
 } // namespace
@@ -72,8 +72,8 @@ int main(int argc, char** argv) {
 
     const int fd = ::socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) { std::perror("socket"); return 1; }
-    // Reutilisation du port entre deux runs d'un balayage (evite "Address
-    // already in use" si un socket precedent traine encore).
+    // Port reuse between two runs of a sweep (avoids "Address already in use" if
+    // a previous socket is still lingering).
     int one = 1;
     ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
     sockaddr_in addr{};
@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
     if (::bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
         std::perror("bind"); ::close(fd); return 1;
     }
-    // Timeout de réception : sert de condition d'arrêt (fin du flux).
+    // Receive timeout: serves as the stop condition (end of stream).
     timeval tv{};
     tv.tv_sec  = idle_ms / 1000;
     tv.tv_usec = (idle_ms % 1000) * 1000;
@@ -93,15 +93,15 @@ int main(int argc, char** argv) {
     std::unordered_map<std::uint32_t, Partial> partials;
     std::vector<std::uint8_t> buf(2048);
     bool got_any = false;
-    // CPU/wall bracketes sur la FENÊTRE ACTIVE (1er -> dernier paquet), pour ne
-    // pas diluer le CPU% avec l'attente de demarrage ni l'idle de fin.
+    // CPU/wall bracketed over the ACTIVE WINDOW (first -> last packet), so as not
+    // to dilute the CPU% with the startup wait or the trailing idle.
     double cpu0 = 0.0, wall0 = 0.0, wall_last = 0.0;
 
     for (;;) {
         const ssize_t n = ::recvfrom(fd, buf.data(), buf.size(), 0, nullptr, nullptr);
         if (n < 0) {
-            if (got_any) break;        // timeout apres reception -> flux fini
-            continue;                  // pas encore commence : on attend
+            if (got_any) break;        // timeout after receiving -> stream finished
+            continue;                  // not started yet: we wait
         }
         if (static_cast<std::size_t>(n) < cam::HEADER_SIZE) continue;
 
@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
         if (!p.got[h.fragment_index]) { p.got[h.fragment_index] = true; ++p.have; }
         if (!frag_ok) p.bad = true;
 
-        if (p.have == p.count) {                 // trame complete
+        if (p.have == p.count) {                 // complete frame
             report.on_frame(h.frame_id, now_ms(), !p.bad);
             partials.erase(h.frame_id);
         }
@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
     const double wall = (wall_last > wall0) ? (wall_last - wall0) : 0.0;
     const double cpu_pct = (wall > 0.0) ? (100.0 * cpu / wall) : 0.0;
 
-    // Ligne commune : impl + cpu (specifiques a l'executable) puis le releve.
+    // Common row: impl + cpu (specific to the executable) then the report.
     std::printf("impl,cpu_ms,cpu_pct,%s\n", bench::RunReport::csv_header().c_str());
     std::printf("baseline,%.1f,%.1f,%s\n", cpu, cpu_pct, report.to_csv().c_str());
     return 0;

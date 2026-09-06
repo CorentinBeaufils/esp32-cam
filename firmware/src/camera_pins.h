@@ -1,12 +1,12 @@
 #pragma once
 
 // ---------------------------------------------------------------------------
-// Brochage caméra de l'ESP32-CAM AI-Thinker (le modèle le plus répandu, avec
-// l'OV2640). Ce sont les valeurs officielles de l'exemple Espressif.
+// Camera pinout of the ESP32-CAM AI-Thinker (the most common model, with the
+// OV2640). These are the official values from the Espressif example.
 //
-// Si tu as une AUTRE carte (ESP-EYE, M5Camera, TTGO...), ce brochage diffère :
-// récupère le tien dans l'exemple CameraWebServer d'Espressif et remplace ce
-// bloc. Un mauvais brochage = échec d'init caméra (message d'erreur au boot).
+// If you have a DIFFERENT board (ESP-EYE, M5Camera, TTGO...), this pinout
+// differs: get yours from Espressif's CameraWebServer example and replace this
+// block. A wrong pinout = camera init failure (error message at boot).
 // ---------------------------------------------------------------------------
 #define PWDN_GPIO_NUM     32
 #define RESET_GPIO_NUM    -1

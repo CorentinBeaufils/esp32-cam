@@ -1,34 +1,69 @@
-# Répertoires de build CMake
+# ---------------------------------------------------------------------------
+# Build directories (CMake)
+# ---------------------------------------------------------------------------
 /build/
 /build-*/
 build/
+/nuild/            # stray build dir from a typo — never commit build output
 
+# CMake / compilation artifacts (in case a build is ever run in-tree)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+*.o
+*.a
+*.obj
+
+# ---------------------------------------------------------------------------
 # Firmware / PlatformIO
+# ---------------------------------------------------------------------------
 firmware/.pio/
 firmware/.vscode/
 
-# IDENTIFIANTS Wi-Fi — ne JAMAIS commiter
+# WiFi CREDENTIALS — NEVER commit
 firmware/src/config.h
 
-# Éditeurs
+# ---------------------------------------------------------------------------
+# Editors / IDEs
+# ---------------------------------------------------------------------------
 .vscode/
 .idea/
 *.user
+*.swp
+*.swo
+*~
+*.orig
+*.rej
 
-# Logs & divers
+# ---------------------------------------------------------------------------
+# Python (analysis script: bench/esp32_data/real_env/analyze.py)
+# ---------------------------------------------------------------------------
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ---------------------------------------------------------------------------
+# Logs & misc
+# ---------------------------------------------------------------------------
 *.log
 *.tmp
 
+# ---------------------------------------------------------------------------
 # OS
+# ---------------------------------------------------------------------------
 .DS_Store
 Thumbs.db
 
-# Archive pédagogique (énoncés, indices, corrigés des TP) : gardée en LOCAL
-# pour révision, mais hors dépôt.
+# ---------------------------------------------------------------------------
+# Local-only material (kept on disk, out of the repo)
+# ---------------------------------------------------------------------------
+# Teaching archive (exercises, hints, solutions of the original labs)
 annexe-tp/
-
-# Notes internes de passation (hors dépôt public, gardées en local)
+# Internal handoff / status notes
 ETAT-DU-PROJET.md
+HANDOFF-QT.md
 
-# NB : bench/data/*.csv (données de l'expérience) reste VERSIONNÉ — ce sont
-#      les preuves derrière BILAN-BANC.md.
+# NB: bench/data/*.csv and bench/esp32_data/**/*.csv (experiment data) stay
+#     VERSIONED — they are the evidence behind the reports in docs/.

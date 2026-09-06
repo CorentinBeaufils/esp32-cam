@@ -3,7 +3,7 @@
 #include <chrono>
 
 // ---------------------------------------------------------------------------
-// Receiver : reception UDP asynchrone (coroutine) + reassemblage + metriques.
+// Receiver: asynchronous UDP reception (coroutine) + reassembly + metrics.
 // ---------------------------------------------------------------------------
 namespace rx {
 
@@ -18,10 +18,10 @@ std::uint64_t now_us() {
 
 Receiver::Receiver(asio::io_context& io, unsigned short port)
     : socket_(io, asio::ip::udp::endpoint(asio::ip::udp::v4(), port)) {
-    // brancher reassembler_.on_frame pour, à chaque trame complète :
-    //   - calculer la latence : recv = now_us(), et alimenter la fenêtre :
+    // wire up reassembler_.on_frame so that, for each complete frame:
+    //   - compute the latency: recv = now_us(), and feed the window:
     //       metrics_.add(frame.timestamp_us, recv);
-    //   - propager au callback utilisateur : if (on_frame) on_frame(frame);
+    //   - forward to the user callback: if (on_frame) on_frame(frame);
     reassembler_.on_frame = [this](const cam::Frame& frame) {
         std::uint64_t recv = now_us();
         metrics_.add(frame.timestamp_us, recv);
@@ -32,15 +32,15 @@ Receiver::Receiver(asio::io_context& io, unsigned short port)
 }
 
 void Receiver::start() {
-    // running_ = true, puis lancer la coroutine loop() :
+    // running_ = true, then launch the loop() coroutine:
     //   asio::co_spawn(socket_.get_executor(), loop(), asio::detached);
     running_ = true;
     asio::co_spawn(socket_.get_executor(), loop(), asio::detached);
 }
 
 void Receiver::stop() {
-    // running_ = false, puis fermer la socket pour débloquer le
-    //   async_receive_from en cours (il repartira avec operation_aborted) :
+    // running_ = false, then close the socket to unblock the in-progress
+    //   async_receive_from (it will resume with operation_aborted):
     //     asio::error_code ignore; socket_.close(ignore);
     running_ = false;
     asio::error_code ignore;
@@ -48,13 +48,13 @@ void Receiver::stop() {
 }
 
 asio::awaitable<void> Receiver::loop() {
-    // tant que running_ :
+    // while running_:
     //   - asio::ip::udp::endpoint from;
     //   - error_code ec;
     //   - n = co_await socket_.async_receive_from(asio::buffer(buffer_), from,
     //           asio::redirect_error(asio::use_awaitable, ec));
-    //   - si ec == operation_aborted : break ; si autre ec : continue ;
-    //   - sinon : reassembler_.feed(buffer_.data(), n);
+    //   - if ec == operation_aborted: break; if any other ec: continue;
+    //   - otherwise: reassembler_.feed(buffer_.data(), n);
     while (running_) {
         asio::ip::udp::endpoint from;
         asio::error_code ec;

@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# run_fanout.sh — balayage par NOMBRE DE FLUX (banc multi-flux TP-P4).
+# run_fanout.sh - sweep by NUMBER OF STREAMS (multi-stream benchmark TP-P4).
 #
-# Fixe le debit PAR FLUX, fait varier N (nb de flux), et mesure le recepteur
-# (agrege sur les N flux). But : voir qui passe l'echelle -- le modele
-# thread-par-socket (recv_baseline_mt) ou le multiplexe asio (recv_asio_mux).
+# Fixes the PER-STREAM rate, varies N (number of streams), and measures the
+# receiver (aggregated over the N streams). Goal: see who scales -- the
+# thread-per-socket model (recv_baseline_mt) or asio multiplexing (recv_asio_mux).
 #
-# Idee de l'experience : epingler le recepteur sur UN SEUL coeur. L'asio_mux
-# reste 1 thread ; le baseline_mt met N threads sur ce coeur -> quand N grimpe,
-# il thrashe (changements de contexte). C'est la que l'async doit gagner.
+# Idea of the experiment: pin the receiver to ONE SINGLE core. asio_mux stays 1
+# thread; baseline_mt puts N threads on that core -> as N grows, it thrashes
+# (context switches). That is where async should win.
 #
-# Usage :
+# Usage:
 #   RECV_BIN=./build-rel/bench/recv_baseline_mt OUT=mt.csv   ./run_fanout.sh 1 2 4 8 16 32 64
 #   RECV_BIN=./build-rel/bench/recv_asio_mux    OUT=mux.csv  ./run_fanout.sh 1 2 4 8 16 32 64
 #
-# Variables (defauts) :
+# Variables (defaults):
 #   BIN=./build-rel/bench   REPLAYER_BIN=$BIN/replayer   RECV_BIN=$BIN/recv_baseline_mt
-#   BASE_PORT=9100  FPS=60 (par flux)  FRAME_BYTES=8000  SECONDS_RUN=5  IDLE_MS=800  SEED=1
-#   RECV_CPU=3  GEN_CPU=5    (RECV_CPU vide = pas d'epinglage)
+#   BASE_PORT=9100  FPS=60 (per stream)  FRAME_BYTES=8000  SECONDS_RUN=5  IDLE_MS=800  SEED=1
+#   RECV_CPU=3  GEN_CPU=5    (RECV_CPU empty = no pinning)
 #   REPEATS=1  OUT=fanout.csv
 # ---------------------------------------------------------------------------
 set -u
@@ -38,7 +38,7 @@ OUT="${OUT:-fanout.csv}"
 N_LIST=("$@"); [ ${#N_LIST[@]} -eq 0 ] && N_LIST=(1 2 4 8 16 32 64)
 
 if [ ! -x "$RECV_BIN" ] || [ ! -x "$REPLAYER_BIN" ]; then
-  echo "ERREUR: binaires introuvables (RECV_BIN='$RECV_BIN', REPLAYER_BIN='$REPLAYER_BIN')." >&2
+  echo "ERROR: binaries not found (RECV_BIN='$RECV_BIN', REPLAYER_BIN='$REPLAYER_BIN')." >&2
   echo "  cmake -S . -B build-rel -DCMAKE_BUILD_TYPE=Release && cmake --build build-rel -j" >&2
   exit 1
 fi
@@ -46,12 +46,12 @@ fi
 RECV_PREFIX=(); [ -n "$RECV_CPU" ] && RECV_PREFIX=(taskset -c "$RECV_CPU")
 GEN_PREFIX=();  [ -n "$GEN_CPU" ]  && GEN_PREFIX=(taskset -c "$GEN_CPU")
 
-# La ligne du recepteur commence deja par 'impl,streams,...' -> on ne prefixe
-# que pass + offered_fps_agg, et le reste des colonnes vient d'elle.
+# The receiver's row already starts with 'impl,streams,...' -> we only prefix
+# pass + offered_fps_agg, and the rest of the columns come from it.
 echo "pass,offered_fps_agg,impl,streams,cpu_ms,cpu_pct,delivered,lost,corrupt,fps,loss_pct,jitter_ms" > "$OUT"
 
 for P in $(seq 1 "$REPEATS"); do
-  echo "[fanout] === passe ${P}/${REPEATS} ==="
+  echo "[fanout] === pass ${P}/${REPEATS} ==="
   for N in "${N_LIST[@]}"; do
     RECVOUT="$(mktemp)"
     "${RECV_PREFIX[@]}" "$RECV_BIN" "$BASE_PORT" "$N" "$IDLE_MS" > "$RECVOUT" 2>/dev/null &
@@ -67,5 +67,5 @@ for P in $(seq 1 "$REPEATS"); do
   done
 done
 
-echo "[fanout] ecrit dans $OUT :"
+echo "[fanout] written to $OUT :"
 column -s, -t "$OUT" 2>/dev/null || cat "$OUT"

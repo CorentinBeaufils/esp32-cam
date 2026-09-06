@@ -5,40 +5,40 @@
 #include <deque>
 
 // ---------------------------------------------------------------------------
-// ScaleStats : statistiques glissantes sur le TEMPS DE TRAITEMENT d'une trame
-// (ici : le coût de l'upscale, en millisecondes).
+// ScaleStats: sliding statistics over the PROCESSING TIME of a frame
+// (here: the cost of the upscale, in milliseconds).
 //
-// C'est la cousine de MetricsWindow, mais elle ne mesure pas le
-// réseau : elle mesure le COÛT CPU de ton pipeline d'affichage. On veut savoir
-// « est-ce que j'agrandis chaque image assez vite pour tenir le temps réel ? ».
+// It is the cousin of MetricsWindow, but it does not measure the
+// network: it measures the CPU COST of your display pipeline. We want to know
+// "am I enlarging each image fast enough to keep up in real time?".
 //
-// Fenêtre par NOMBRE d'échantillons (les N dernières trames), pas par durée :
-// on raisonne « sur les 120 dernières images », pas « sur la dernière seconde ».
+// Window by NUMBER of samples (the last N frames), not by duration:
+// we reason "over the last 120 images", not "over the last second".
 //
-// Trois vues utiles :
-//   - avg_ms()  : le coût typique ;
-//   - p95_ms()  : le coût dans le pire des cas courant (95e centile) -- c'est
-//                 LUI qui fait sauter des trames, pas la moyenne ;
-//   - over_budget(budget) : combien de trames récentes ont dépassé le budget.
+// Three useful views:
+//   - avg_ms()  : the typical cost;
+//   - p95_ms()  : the cost in the common worst case (95th percentile) -- it is
+//                 THIS that makes frames drop, not the average;
+//   - over_budget(budget): how many recent frames exceeded the budget.
 //
-// Logique PURE, aucune dépendance (ni OpenCV ni asio) -> testable exactement.
+// PURE logic, no dependency (neither OpenCV nor asio) -> exactly testable.
 // ---------------------------------------------------------------------------
 namespace up {
 
 class ScaleStats {
 public:
-    // window : nombre d'échantillons conservés (défaut 120 ~ 4-5 s à 25 fps).
+    // window: number of samples kept (default 120 ~ 4-5 s at 25 fps).
     explicit ScaleStats(std::size_t window = 120);
 
-    // Enregistre le coût d'une trame (ms). Évince le plus ancien si plein.
+    // Records the cost of a frame (ms). Evicts the oldest if full.
     void record(double ms);
 
-    std::size_t count() const;      // échantillons actuellement dans la fenêtre
-    double avg_ms() const;          // moyenne (0 si vide)
-    double max_ms() const;          // maximum (0 si vide)
-    double p95_ms() const;          // 95e centile (0 si vide)
+    std::size_t count() const;      // samples currently in the window
+    double avg_ms() const;          // average (0 if empty)
+    double max_ms() const;          // maximum (0 if empty)
+    double p95_ms() const;          // 95th percentile (0 if empty)
 
-    // Nombre d'échantillons de la fenêtre strictement au-dessus du budget.
+    // Number of samples in the window strictly above the budget.
     std::size_t over_budget(double budget_ms) const;
 
 private:

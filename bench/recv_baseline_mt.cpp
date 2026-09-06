@@ -18,20 +18,20 @@
 #include <vector>
 
 // ---------------------------------------------------------------------------
-// recv_baseline_mt — l'etalon "montee en charge naive" (banc multi-flux P4).
+// recv_baseline_mt - the "naive scale-up" reference (multi-stream benchmark P4).
 //
-// Le modele bloquant qui passe a l'echelle de la seule facon qu'il connait :
-// UN THREAD PAR SOCKET. N flux -> N threads, chacun bloque dans son recvfrom.
-// Simple, mais chaque thread est un cout (pile, ordonnancement) : quand N
-// depasse le nombre de coeurs, ca thrashe (changements de contexte).
+// The blocking model that scales the only way it knows how: ONE THREAD PER
+// SOCKET. N streams -> N threads, each blocked in its own recvfrom. Simple, but
+// each thread is a cost (stack, scheduling): when N exceeds the number of cores,
+// it thrashes (context switches).
 //
-// A comparer a recv_asio_mux, qui multiplexe les N sockets sur UN SEUL thread.
-// C'est LA question ou l'async est cense payer : la concurrence.
+// To be compared with recv_asio_mux, which multiplexes the N sockets onto ONE
+// SINGLE thread. This is THE question where async is meant to pay off: concurrency.
 //
 //   recv_baseline_mt <base_port> <streams> [idle_ms=1000]
 //
-// Sortie : une ligne CSV AGREGEE (somme sur les N flux). Meme colonnes que
-// recv_asio_mux -> comparables directement.
+// Output: one AGGREGATED CSV row (summed over the N streams). Same columns as
+// recv_asio_mux -> directly comparable.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -54,7 +54,7 @@ struct Partial {
     std::vector<bool> got;
 };
 
-// Horodatage global de la fenetre active, partage entre threads.
+// Global timestamps of the active window, shared between threads.
 std::atomic<double> g_first{-1.0};
 std::atomic<double> g_last{0.0};
 
@@ -63,7 +63,7 @@ void receive_one(int port, int idle_ms, bench::RunReport* report, bool verbose) 
     if (fd < 0) return;
     int one = 1;
     ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
-    // SO_RCVBUF optionnel (env RCVBUF, en octets) -- test du levier "tampon".
+    // Optional SO_RCVBUF (env RCVBUF, in bytes) -- tests the "buffer" lever.
     if (const char* e = ::getenv("RCVBUF")) {
         int rb = std::atoi(e);
         if (rb > 0) {
@@ -71,7 +71,7 @@ void receive_one(int port, int idle_ms, bench::RunReport* report, bool verbose) 
             if (verbose) {
                 int act = 0; socklen_t l = sizeof(act);
                 ::getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &act, &l);
-                std::fprintf(stderr, "[recv_baseline_mt] SO_RCVBUF demande=%d effectif=%d (x2 noyau)\n", rb, act);
+                std::fprintf(stderr, "[recv_baseline_mt] SO_RCVBUF requested=%d effective=%d (x2 kernel)\n", rb, act);
             }
         }
     }
@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
     for (auto& th : threads) th.join();
     const double cpu = cpu_ms_self() - cpu0;
 
-    // Agregation sur les N flux.
+    // Aggregation over the N streams.
     std::uint64_t delivered = 0, lost = 0, corrupt = 0, expected = 0;
     double fps_sum = 0.0, jitter_sum = 0.0;
     for (auto& r : reports) {

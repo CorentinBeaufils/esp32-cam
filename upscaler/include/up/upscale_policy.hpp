@@ -3,32 +3,32 @@
 #include <cstdint>
 
 // ---------------------------------------------------------------------------
-// UpscalePolicy : choisit, image après image, la MÉTHODE d'interpolation à
-// utiliser pour rester dans le budget temps réel.
+// UpscalePolicy: chooses, image after image, the interpolation METHOD to use
+// in order to stay within the real-time budget.
 //
-// Le problème concret : à ~28 fps tu as ~35 ms par image pour TOUT faire
-// (décoder + agrandir + afficher). Les algos d'agrandissement ne coûtent pas
-// pareil -- du moins cher au plus cher / du plus grossier au plus fin :
+// The concrete problem: at ~28 fps you have ~35 ms per image to do EVERYTHING
+// (decode + enlarge + display). Enlargement algorithms do not cost the same --
+// from cheapest to most expensive / from coarsest to finest:
 //
 //     Nearest  <  Linear  <  Cubic  <  Lanczos
 //
-// Lanczos est le plus beau mais peut ne pas tenir dans le budget selon la
-// machine et la résolution. Plutôt que de choisir une fois pour toutes, on
-// s'ADAPTE : on mesure le temps réel de l'upscale, et
-//   - si on dépasse le budget -> on redescend d'un cran (moins cher) ;
-//   - si on est confortablement SOUS le budget depuis un moment -> on retente
-//     un cran plus beau.
+// Lanczos is the nicest but may not fit within the budget depending on the
+// machine and the resolution. Rather than choosing once and for all, we ADAPT:
+// we measure the real time of the upscale, and
+//   - if we exceed the budget -> we step down one level (cheaper);
+//   - if we are comfortably UNDER the budget for a while -> we try one level
+//     nicer again.
 //
-// C'est exactement le principe du contrôle de débit d'un encodeur vidéo, en
-// miniature. L'HYSTÉRÉSIS (le « depuis un moment ») évite l'oscillation :
-// sans elle, on basculerait entre deux niveaux à chaque image.
+// This is exactly the rate-control principle of a video encoder, in miniature.
+// The HYSTERESIS (the "for a while") avoids oscillation: without it, we would
+// flip between two levels on every image.
 //
-// Logique PURE et DÉTERMINISTE -> testable au cas près.
+// PURE and DETERMINISTIC logic -> testable case by case.
 // ---------------------------------------------------------------------------
 namespace up {
 
-// Ordonnées du moins cher/fin (0) au plus cher/fin (3). L'ordre EST utilisé
-// (on monte/descend par ++/--), ne le change pas sans réfléchir.
+// Ordered from cheapest/coarsest (0) to most expensive/finest (3). The order IS
+// used (we go up/down via ++/--), do not change it without thinking.
 enum class Interp {
     Nearest = 0,
     Linear  = 1,
@@ -40,22 +40,22 @@ const char* to_string(Interp interp);
 
 class UpscalePolicy {
 public:
-    // budget_ms : temps max autorisé par trame pour l'upscale.
-    // start     : méthode de départ (Cubic : bon compromis).
+    // budget_ms: max time allowed per frame for the upscale.
+    // start    : starting method (Cubic: a good compromise).
     explicit UpscalePolicy(double budget_ms, Interp start = Interp::Cubic);
 
-    // À appeler APRÈS chaque upscale avec le temps mesuré (ms). Met à jour le
-    // niveau et renvoie la méthode à utiliser pour la PROCHAINE trame.
+    // Call AFTER each upscale with the measured time (ms). Updates the level and
+    // returns the method to use for the NEXT frame.
     Interp update(double measured_ms);
 
     Interp current() const;
-    std::uint64_t downgrades() const;   // nombre de descentes (télémétrie)
-    std::uint64_t upgrades() const;     // nombre de montées
+    std::uint64_t downgrades() const;   // number of step-downs (telemetry)
+    std::uint64_t upgrades() const;     // number of step-ups
 
 private:
     double budget_ms_;
     Interp current_;
-    int good_streak_ = 0;               // trames consécutives bien sous le budget
+    int good_streak_ = 0;               // consecutive frames well under budget
     std::uint64_t downgrades_ = 0;
     std::uint64_t upgrades_ = 0;
 };

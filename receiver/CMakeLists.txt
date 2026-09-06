@@ -1,4 +1,4 @@
-# Récepteur : réception UDP asynchrone (asio, coroutines -> C++20) + télémétrie.
+# Receiver: asynchronous UDP reception (asio, coroutines -> C++20) + telemetry.
 add_library(receiver STATIC src/metrics.cpp src/receiver.cpp)
 target_include_directories(receiver PUBLIC include)
 target_link_libraries(receiver
