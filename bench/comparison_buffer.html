@@ -1,6 +1,6 @@
 <!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>le tampon, pas l'archi</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>the buffer, not the arch</title>
 <style>
   :root{--surface-1:#fcfcfb;--page:#f9f9f7;--text:#0b0b0b;--text2:#52514e;--muted:#898781;
     --grid:#e1e0d9;--axis:#c3c2b7;--border:rgba(11,11,11,.10);--base:#2a78d6;--asio:#eb6834;--good:#0ca30c;}
@@ -25,15 +25,15 @@
   .tipbox{position:absolute;pointer-events:none;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:.78rem;box-shadow:0 4px 14px rgba(0,0,0,.14);opacity:0;transition:opacity .08s;white-space:nowrap;z-index:5}
 </style></head>
 <body><div class="wrap">
-  <h1>C'était le tampon, pas l'architecture</h1>
-  <p class="sub">Même banc multi-flux (2 cœurs, 60 fps/flux, 10 passes). On compare l'asio shardé avec le tampon par défaut vs un <b>SO_RCVBUF de 8 Mo</b>, face au thread-par-socket.</p>
+  <h1>It was the buffer, not the architecture</h1>
+  <p class="sub">Same multi-stream bench (2 cores, 60 fps/stream, 10 passes). Sharded asio with the default buffer vs an <b>8 MB SO_RCVBUF</b>, against thread-per-socket.</p>
   <div class="legend">
-    <span><i class="sw" style="background:var(--muted);height:0;border-top:2px dashed var(--muted);width:22px"></i>asio_shard — tampon défaut</span>
-    <span><i class="sw" style="background:var(--asio)"></i>asio_shard — 8 Mo</span>
-    <span><i class="sw" style="background:var(--base)"></i>baseline_mt — 8 Mo</span>
+    <span><i class="sw" style="background:var(--muted);height:0;border-top:2px dashed var(--muted);width:22px"></i>asio_shard — default buffer</span>
+    <span><i class="sw" style="background:var(--asio)"></i>asio_shard — 8 MB</span>
+    <span><i class="sw" style="background:var(--base)"></i>baseline_mt — 8 MB</span>
   </div>
-  <div class="panel"><h2>Perte (%)</h2><p class="cap">Le même code async : avec le tampon par défaut il monte à 15 % (pointillé) ; avec 8 Mo il tombe à ZÉRO, à égalité avec le thread-par-socket.</p><div id="p_loss"></div></div>
-  <div class="panel"><h2>Coût CPU (% d'un cœur)</h2><p class="cap">À gros tampon, asio_shard et thread-par-socket consomment quasi pareil. L'architecture n'était jamais le problème.</p><div id="p_cpu"></div></div>
+  <div class="panel"><h2>Loss (%)</h2><p class="cap">The same async code: with the default buffer it climbs to 15% (dashed); with 8 MB it drops to ZERO, level with thread-per-socket.</p><div id="p_loss"></div></div>
+  <div class="panel"><h2>CPU cost (% of one core)</h2><p class="cap">With a large buffer, asio_shard and thread-per-socket use almost the same. The architecture was never the problem.</p><div id="p_cpu"></div></div>
   <div class="callout" id="verdict"></div>
 </div>
 <div class="tipbox" id="tip"></div>
@@ -53,7 +53,7 @@ function panel(elId,keys,opts){
     const t=mk('text',{class:'tick',x:m.l-8,y:yy+4,'text-anchor':'end'});t.textContent=opts.fmt(v);svg.appendChild(t);}
   const ax=mk('g',{class:'axis'});ax.appendChild(mk('line',{x1:m.l,x2:m.l+iw,y1:m.t+ih,y2:m.t+ih}));svg.appendChild(ax);
   for(let i=0;i<N;i++){const t=mk('text',{class:'tick',x:x(i),y:m.t+ih+16,'text-anchor':'middle'});t.textContent=NN[i];svg.appendChild(t);}
-  const xl=mk('text',{class:'lbl',x:m.l+iw/2,y:H-4,'text-anchor':'middle'});xl.textContent='N (nombre de flux)';svg.appendChild(xl);
+  const xl=mk('text',{class:'lbl',x:m.l+iw/2,y:H-4,'text-anchor':'middle'});xl.textContent='N (number of streams)';svg.appendChild(xl);
   for(const spec of opts.series){const a=DATA[spec.k];
     let ln='';for(let i=0;i<N;i++){const v=Array.isArray(a[i])?a[i][0]:a[i];ln+=(i?'L':'M')+x(i)+','+y(v)+' ';}
     svg.appendChild(mk('path',{d:ln,fill:'none',stroke:spec.c,'stroke-width':spec.dash?1.6:2.4,'stroke-linejoin':'round',...(spec.dash?{'stroke-dasharray':'4 4'}:{})}));
@@ -72,15 +72,15 @@ function panel(elId,keys,opts){
   el.appendChild(svg);
 }
 panel('p_loss',['shard_small_loss','shard_big_loss','mt_big_loss'],{fmt:v=>v.toFixed(1)+'%',series:[
-  {k:'shard_small_loss',c:'var(--muted)',n:'défaut',dash:true,off:-6},
-  {k:'shard_big_loss',c:'var(--asio)',n:'shard 8Mo',off:14},
-  {k:'mt_big_loss',c:'var(--base)',n:'mt 8Mo',off:4}]});
+  {k:'shard_small_loss',c:'var(--muted)',n:'default',dash:true,off:-6},
+  {k:'shard_big_loss',c:'var(--asio)',n:'shard 8MB',off:14},
+  {k:'mt_big_loss',c:'var(--base)',n:'mt 8MB',off:4}]});
 panel('p_cpu',['shard_big_cpu','mt_big_cpu'],{fmt:v=>Math.round(v)+'%',series:[
-  {k:'shard_big_cpu',c:'var(--asio)',n:'shard 8Mo',off:-6},
-  {k:'mt_big_cpu',c:'var(--base)',n:'mt 8Mo',off:8}]});
+  {k:'shard_big_cpu',c:'var(--asio)',n:'shard 8MB',off:-6},
+  {k:'mt_big_cpu',c:'var(--base)',n:'mt 8MB',off:8}]});
 document.getElementById('verdict').innerHTML=
- "<b>Ta piste était la bonne.</b> Le même récepteur asio shardé, qui perdait 15 % à N=128 avec le tampon par défaut, tombe à <b>0 % de perte</b> dès qu'on lui donne un SO_RCVBUF de 8 Mo — exactement à égalité avec le thread-par-socket, pour un CPU quasi identique. "+
- "La perte n'était donc <b>ni un problème de CPU, ni de cœurs, ni d'architecture async</b> : c'était le <b>tampon de réception trop petit</b> face à des rafales synchronisées. Le chemin async a une latence de service un peu plus longue (epoll→dispatch→coroutine) ; il lui faut juste un tampon assez grand pour encaisser la rafale, et il redevient équivalent. "+
- "<b>Conclusion définitive du banc :</b> correctement dimensionné (SO_RCVBUF), asio <b>tient aussi bien</b> que les threads bloquants sur ce flux — sans l'avantage décisif qu'on lui prête, mais sans le handicap non plus. Pour CE projet (peu de flux), les threads restent le choix le plus simple ; asio devient pertinent au c10k (des milliers de connexions). Cinq récepteurs, quatre manches, et une cause racine trouvée : le tampon.";
+ "<b>Your hunch was right.</b> The same sharded asio receiver that lost 15% at N=128 with the default buffer drops to <b>0% loss</b> as soon as it gets an 8 MB SO_RCVBUF — exactly level with thread-per-socket, at nearly identical CPU. "+
+ "The loss was therefore <b>neither a CPU, core, nor async-architecture problem</b>: it was a <b>receive buffer too small</b> for synchronized bursts. The async path has a slightly longer service latency (epoll&#8594;dispatch&#8594;coroutine); it just needs a buffer large enough to absorb the burst, and it becomes equivalent again. "+
+ "<b>Final verdict of the bench:</b> correctly sized (SO_RCVBUF), asio <b>holds up as well</b> as blocking threads on this workload — without the decisive edge it is often credited with, but without the handicap either. For THIS project (few streams) blocking threads stay the simplest choice; asio becomes relevant at c10k (thousands of connections). Five receivers, four rounds, and one root cause found: the buffer.";
 </script>
 </body></html>

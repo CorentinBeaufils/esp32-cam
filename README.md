@@ -59,8 +59,8 @@ Method, 4 scenarios, and raw data → **[`real-conditions.en.md`](docs/real-cond
 ## Architecture
 
 ```
-ESP32-CAM ──JPEG/UDP──► PC : réassemblage → décodage → upscaling → affichage
-                                    └────────► télémétrie (fps, pertes, gigue)
+ESP32-CAM ──JPEG/UDP──► PC : re-assembly → decode → upscaling → display
+                                    └────────► telemtry (fps, loss, jitter)
 ```
 
 Three viewers consume this stream: `display/viewer` (direct display),
@@ -87,14 +87,14 @@ Three viewers consume this stream: `display/viewer` (direct display),
 ```bash
 cmake -S . -B build-rel -DCMAKE_BUILD_TYPE=Release
 cmake --build build-rel -j
-ctest --test-dir build-rel --output-on-failure     # logique pure (Catch2)
+ctest --test-dir build-rel --output-on-failure     # logic pure (Catch2)
 
 # en vrai (OpenCV requis) :
-./build-rel/receiver/receiver 9000                 # télémétrie headless
-./build-rel/display/viewer 9000                    # affichage
-./build-rel/upscaler/viewer_up 9000 2 30           # affichage + upscaling x2, budget 30 ms
+./build-rel/receiver/receiver 9000                 # telemetry headless
+./build-rel/display/viewer 9000                    # display
+./build-rel/upscaler/viewer_up 9000 2 30           # display + upscaling x2, budget 30 ms
 ./build-rel/viewer_qt/viewer_qt 9000               # dashboard Qt (vidéo + stats + graphe)
-./build-rel/receiver/receiver 9000 --csv run.csv   # mesure : journalise la télémétrie
+./build-rel/receiver/receiver 9000 --csv run.csv   # mesure : logs telemetry 
 ```
 
 The bench (generator + receivers, POSIX sockets, no OpenCV): see

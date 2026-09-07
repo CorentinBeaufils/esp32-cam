@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -55,20 +55,20 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Banc multi-flux : async multiplexé vs thread-par-socket</h1>
-  <p class="sub">N flux UDP concurrents, 60 fps/flux (trames 8000 o), récepteur épinglé sur un cœur, 10 passes. <b>asio_mux</b> = N sockets sur 1 thread (io_context) ; <b>baseline_mt</b> = 1 thread bloquant par socket. Trait = médiane, bande = min–max.</p>
+  <h1>Multi-stream bench: multiplexed async vs thread-per-socket</h1>
+  <p class="sub">N concurrent UDP streams, 60 fps/stream (8000-byte frames), receiver pinned to one core, 10 passes. <b>asio_mux</b> = N sockets on 1 thread (io_context); <b>baseline_mt</b> = 1 blocking thread per socket. Line = median, band = min-max.</p>
   <div class="legend">
     <span><i class="sw" style="background:var(--base)"></i>baseline_mt (thread / socket)</span>
     <span><i class="sw" style="background:var(--asio)"></i>asio_mux (1 thread, N sockets)</span>
-    <span><i class="sw" style="background:var(--muted);height:0;border-top:2px dashed var(--muted);width:22px"></i>idéal</span>
+    <span><i class="sw" style="background:var(--muted);height:0;border-top:2px dashed var(--muted);width:22px"></i>ideal</span>
   </div>
 
-  <div class="panel"><h2>Perte (%)</h2><p class="cap">La métrique clé : à partir de N=64, l'async mono-thread sature son cœur et lâche des paquets ; le thread-par-socket reste à zéro.</p><div id="p_loss"></div></div>
-  <div class="panel"><h2>Frames livrées (% de l'offert)</h2><p class="cap">100 % = tout reçu. En dessous : soit le générateur n'a pas suivi (les deux), soit le récepteur a perdu (asio en plus).</p><div id="p_dpct"></div></div>
-  <div class="panel"><h2>Coût CPU (ms)</h2><p class="cap">Quasi identiques jusqu'à N=32. Au-delà, l'asio_mux consomme moins… parce qu'il traite moins (il jette 15 % du travail).</p><div id="p_cpu"></div></div>
+  <div class="panel"><h2>Loss (%)</h2><p class="cap">The key metric: from N=64 on, the single-thread async saturates its core and drops packets; thread-per-socket stays at zero.</p><div id="p_loss"></div></div>
+  <div class="panel"><h2>Frames delivered (% of offered)</h2><p class="cap">100% = everything received. Below: either the generator could not keep up (both), or the receiver lost frames (asio only).</p><div id="p_dpct"></div></div>
+  <div class="panel"><h2>CPU cost (ms)</h2><p class="cap">Nearly identical up to N=32. Beyond that, asio_mux uses less... because it does less (it drops 15% of the work).</p><div id="p_cpu"></div></div>
 
   <div class="callout" id="verdict"></div>
-  <details><summary>Voir les valeurs (médianes sur 10 passes)</summary><div id="tbl"></div></details>
+  <details><summary>Show the values (medians over 10 passes)</summary><div id="tbl"></div></details>
 </div>
 <div class="tipbox" id="tip"></div>
 
@@ -96,7 +96,7 @@ function panel(elId, metric, opts){
     const t=mk('text',{class:'tick',x:m.l-8,y:yy+4,'text-anchor':'end'}); t.textContent=opts.fmt(v); svg.appendChild(t);}
   const ax=mk('g',{class:'axis'}); ax.appendChild(mk('line',{x1:m.l,x2:m.l+iw,y1:m.t+ih,y2:m.t+ih})); svg.appendChild(ax);
   for(let i=0;i<N;i++){const t=mk('text',{class:'tick',x:x(i),y:m.t+ih+16,'text-anchor':'middle'}); t.textContent=NN[i]; svg.appendChild(t);}
-  const xl=mk('text',{class:'lbl',x:m.l+iw/2,y:H-4,'text-anchor':'middle'}); xl.textContent='N (nombre de flux)'; svg.appendChild(xl);
+  const xl=mk('text',{class:'lbl',x:m.l+iw/2,y:H-4,'text-anchor':'middle'}); xl.textContent='N (number of streams)'; svg.appendChild(xl);
   if(opts.ideal!==undefined){const yy=y(opts.ideal); svg.appendChild(mk('line',{class:'ideal',x1:m.l,x2:m.l+iw,y1:yy,y2:yy}));}
   for(const k of ['baseline_mt','asio_mux']){
     const arr=DATA[k][metric];
@@ -114,7 +114,7 @@ function panel(elId, metric, opts){
     let bi=0,bd=1e9; for(let i=0;i<N;i++){const d=Math.abs(x(i)-sx);if(d<bd){bd=d;bi=i;}}
     ch.setAttribute('x1',x(bi));ch.setAttribute('x2',x(bi));ch.style.opacity=1;
     const b=DATA.baseline_mt[metric][bi][0], a=DATA.asio_mux[metric][bi][0];
-    tip.innerHTML=`<div style="color:var(--text2)">N = ${NN[bi]} flux</div><div><span style="color:var(--base)">■</span> baseline_mt : ${opts.fmt(b)}</div><div><span style="color:var(--asio)">■</span> asio_mux : ${opts.fmt(a)}</div>`;
+    tip.innerHTML=`<div style="color:var(--text2)">N = ${NN[bi]} streams</div><div><span style="color:var(--base)">■</span> baseline_mt : ${opts.fmt(b)}</div><div><span style="color:var(--asio)">■</span> asio_mux : ${opts.fmt(a)}</div>`;
     tip.style.opacity=1; tip.style.left=(ev.clientX+14)+'px'; tip.style.top=(ev.clientY+12)+'px';
   });
   hit.addEventListener('pointerleave',()=>{ch.style.opacity=0;tip.style.opacity=0;});
@@ -125,10 +125,10 @@ panel('p_dpct','dpct',{fmt:v=>Math.round(v)+'%',ideal:100,idealTop:100});
 panel('p_cpu','cpu',{zero:true,fmt:v=>Math.round(v)});
 
 document.getElementById('verdict').innerHTML=
- "<b>Le résultat, à l'envers de l'intuition :</b> ici c'est le <b>thread-par-socket</b> qui passe l'échelle — perte nulle jusqu'à 128 flux — tandis que l'<b>async mono-thread décroche à N=64</b> (3,6 %) et s'effondre à N=128 (15,5 % de perte). La raison est structurelle : <b>un seul thread = un seul cœur</b>. Le plafond de l'asio_mux, c'est le débit paquets d'<i>un</i> cœur ; passé ~50k paquets/s agrégés, son unique boucle d'événements n'écope plus assez vite et les tampons noyau débordent. Le modèle N-threads, lui, étale le travail (et le noyau réveille le thread précis dont la socket est prête). "+
- "<b>La vraie leçon</b> — celle qui répond enfin à ta question : l'async ne gagne pas «&nbsp;par magie&nbsp;à l'échelle&nbsp;». Il gagne sur <b>beaucoup de connexions peu actives</b> (le cas c10k : des milliers de sockets qui attendent, où lancer un thread par socket ruine la mémoire et l'ordonnanceur). Sur <b>peu de flux très chargés</b>, on est limité par le CPU, et il faut <b>plusieurs cœurs</b> — donc plusieurs threads. Le vrai design de prod n'est ni l'un ni l'autre, c'est le <b>pool</b> : un io_context tourné par M threads (M ≈ nb de cœurs) — le multiplexage d'asio ET le multicœur. Ton asio_mux à 1 thread isolait volontairement la variable «&nbsp;multiplexage&nbsp;»&nbsp;; en prod tu lances io.run() sur un pool.";
+ "<b>The counter-intuitive result:</b> here it is <b>thread-per-socket</b> that scales — zero loss up to 128 streams — while the <b>single-thread async breaks down at N=64</b> (3.6%) and collapses at N=128 (15.5% loss). The reason is structural: <b>one thread = one core</b>. asio_mux&#39;s ceiling is the packet rate of <i>one</i> core; past ~50k aggregate packets/s its single event loop no longer drains fast enough and the kernel buffers overflow. The N-thread model spreads the work (and the kernel wakes the exact thread whose socket is ready). "+
+ "<b>The real lesson</b> — the one that finally answers the question: async does not win by magic at scale. It wins on <b>many mostly-idle connections</b> (the c10k case: thousands of waiting sockets, where one thread per socket wastes memory and the scheduler). On <b>few, heavily-loaded streams</b> you are CPU-bound and need <b>several cores</b> — hence several threads. The real production design is neither one nor the other, it is the <b>pool</b>: one io_context run by M threads (M &#8776; core count) — asio&#39;s multiplexing AND multicore. This asio_mux on 1 thread deliberately isolated the multiplexing variable; in production you run io.run() on a pool.";
 (function(){
-  const cols=[['loss','perte %',v=>v.toFixed(2)],['dpct','livré %',v=>Math.round(v)],['cpu','CPU ms',v=>Math.round(v)]];
+  const cols=[['loss','loss %',v=>v.toFixed(2)],['dpct','delivered %',v=>Math.round(v)],['cpu','CPU ms',v=>Math.round(v)]];
   let h='<table><thead><tr><th>N</th>';
   for(const [,nm] of cols) h+=`<th>mt ${nm}</th><th>mux ${nm}</th>`;
   h+='</tr></thead><tbody>';
